@@ -20,7 +20,7 @@ html,body{height:100%;background:radial-gradient(ellipse at 50% 40%,#2c1712,var(
 canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
 #hud{position:absolute;top:0;inset-inline:0;display:flex;justify-content:space-between;align-items:flex-start;gap:10px;padding:1.4% 1.8%;pointer-events:none;font-size:clamp(11px,1.5vw,15px)}
 .bars{display:grid;gap:5px;width:min(42%,300px)}
-.bar{display:grid;grid-template-columns:4.8em 1fr 3.6em;align-items:center;gap:6px;text-shadow:0 1px 2px #000}
+.bar{display:grid;grid-template-columns:5.2em 1fr 3.6em;align-items:center;gap:6px;text-shadow:0 1px 2px #000}
 .bar span{font-weight:700}
 .track{height:.8em;background:#0008;border:1.5px solid var(--bronze);border-radius:99px;overflow:hidden}
 .fill{height:100%;width:100%;border-radius:99px;transition:width .15s}
@@ -75,7 +75,7 @@ kbd{font:700 12px Heebo,sans-serif;background:#f6e7c8;color:#2a1411;border-radiu
 <div id="hud">
   <div class="bars">
     <div class="bar"><span>ליאונידס</span><div class="track"><div id="hpFill" class="fill hp"></div></div><b id="hpTxt">100</b></div>
-    <div class="bar"><span>האסם</span><div class="track"><div id="grFill" class="fill gr"></div></div><b id="grTxt">100</b></div>
+    <div class="bar"><span>דאודורנט</span><div class="track"><div id="grFill" class="fill gr"></div></div><b id="grTxt">100</b></div>
   </div>
   <div class="stats">
     <div class="chip" title="ז'ירז'ורים"><span data-fish></span> <b id="seeds">0</b></div>
@@ -93,7 +93,7 @@ kbd{font:700 12px Heebo,sans-serif;background:#f6e7c8;color:#2a1411;border-radiu
 
 <div id="ovTitle" class="overlay on"><div class="panel">
   <h1>ליאונידס</h1><h2>300 גרעינים</h2>
-  <p class="tag">אוגר ספרטני אחד. מעבר צר אחד בין ההר לים. וצבא שלם של עכברושים בפיקוד המלך חולדה, שרוצה את האסם שלך.</p>
+  <p class="tag">אוגר ספרטני אחד. מעבר צר אחד בין ההר לים. וצבא שלם של עכברושים בפיקוד המלך חולדה, שרוצה את הדאודורנט <bdi>"אנטי ז'לל"</bdi> שלך.</p>
   <div class="keys">
     <div><kbd>←</kbd><kbd>→</kbd> או <kbd>A</kbd><kbd>D</kbd> תנועה</div>
     <div><kbd>רווח</kbd> או <kbd>J</kbd> דקירה בחנית</div>
@@ -141,16 +141,39 @@ const pick=a=>a[Math.floor(Math.random()*a.length)];
 function resize(){const r=cv.getBoundingClientRect();const d=Math.min(window.devicePixelRatio||1,2);cv.width=Math.max(1,Math.round(r.width*d));cv.height=Math.max(1,Math.round(r.height*d));}
 const ro=new ResizeObserver(resize);ro.observe(cv);
 
-/* ---------- sound ---------- */
-let actx=null,muted=store.get('leo_muted',false);
-const SFX={boom:[80,28,'square',.16,.7],bow:[900,380,'triangle',.05,.09],hit:[220,90,'square',.07,.1],stab:[520,260,'triangle',.05,.07],hurt:[150,60,'sawtooth',.09,.18],kick:[110,35,'sawtooth',.16,.4],coin:[880,1320,'sine',.05,.1],block:[760,520,'square',.04,.06],wave:[330,660,'triangle',.09,.5],die:[300,50,'sawtooth',.12,.9]};
-function sfx(n){if(muted)return;try{if(!actx)actx=new(window.AudioContext||window.webkitAudioContext)();const S=SFX[n],t=actx.currentTime,o=actx.createOscillator(),g=actx.createGain();o.type=S[2];o.frequency.setValueAtTime(S[0],t);o.frequency.exponentialRampToValueAtTime(S[1],t+S[4]);g.gain.setValueAtTime(S[3],t);g.gain.exponentialRampToValueAtTime(.0001,t+S[4]);o.connect(g);g.connect(actx.destination);o.start(t);o.stop(t+S[4]+.02);}catch(e){}}
-
-function thunder(){if(muted)return;try{if(!actx)actx=new(window.AudioContext||window.webkitAudioContext)();const t=actx.currentTime,len=actx.sampleRate*1.4,buf=actx.createBuffer(1,len,actx.sampleRate),d=buf.getChannelData(0);
-  for(let i=0;i<len;i++)d[i]=(Math.random()*2-1)*Math.pow(1-i/len,2.2);
-  const src=actx.createBufferSource(),f=actx.createBiquadFilter(),g=actx.createGain();src.buffer=buf;f.type='lowpass';f.frequency.setValueAtTime(2400,t);f.frequency.exponentialRampToValueAtTime(180,t+1.2);g.gain.value=.5;
-  src.connect(f);f.connect(g);g.connect(actx.destination);src.start(t);}catch(e){}}
-function shout(){if(muted||!window.speechSynthesis)return;try{const u=new SpeechSynthesisUtterance('This is Sparta!');u.lang='en-US';u.pitch=.4;u.rate=.9;u.volume=1;speechSynthesis.cancel();speechSynthesis.speak(u);}catch(e){}}
+/* ---------- sound ----------
+   הכול מסונתז ב-Web Audio. כל הצלילים עוברים דרך master → compressor כדי שלא יתעוותו כשהרבה מתנגנים יחד */
+let actx=null,master=null,muted=store.get('leo_muted',false);
+function ac(){
+  if(!actx){actx=new(window.AudioContext||window.webkitAudioContext)();const c=actx.createDynamicsCompressor();c.threshold.value=-16;c.knee.value=12;c.ratio.value=4;
+    master=actx.createGain();master.gain.value=.9;master.connect(c);c.connect(actx.destination);}
+  if(actx.state==='suspended')actx.resume();return actx;
+}
+// [תדר התחלה, תדר סוף, צורת גל, עוצמה, משך]
+const SFX={bow:[900,380,'triangle',.05,.09],hit:[220,90,'square',.06,.1],stab:[520,260,'triangle',.05,.07],hurt:[150,60,'sawtooth',.08,.18],coin:[880,1320,'sine',.05,.1],block:[760,520,'square',.035,.06],wave:[330,660,'triangle',.09,.5],die:[300,50,'sawtooth',.11,.9]};
+function sfx(n){if(muted)return;try{const a=ac(),S=SFX[n],t=a.currentTime,o=a.createOscillator(),f=a.createBiquadFilter(),g=a.createGain();
+  o.type=S[2];o.frequency.setValueAtTime(S[0],t);o.frequency.exponentialRampToValueAtTime(S[1],t+S[4]);f.type='lowpass';f.frequency.value=2800; // מסנן שמרכך את הצרימה
+  g.gain.setValueAtTime(S[3],t);g.gain.exponentialRampToValueAtTime(.0001,t+S[4]);o.connect(f);f.connect(g);g.connect(master);o.start(t);o.stop(t+S[4]+.02);}catch(e){}}
+function noise(a,dur,brown){const len=Math.floor(a.sampleRate*dur),buf=a.createBuffer(1,len,a.sampleRate),d=buf.getChannelData(0);let l=0;
+  for(let i=0;i<len;i++){const w=Math.random()*2-1;if(brown){l=(l+.02*w)/1.02;d[i]=l*3.5;}else d[i]=w;}const src=a.createBufferSource();src.buffer=buf;return src;}
+function env(a,g,t,peak,att,dec){g.gain.setValueAtTime(.0001,t);g.gain.exponentialRampToValueAtTime(peak,t+att);g.gain.exponentialRampToValueAtTime(.0001,t+att+dec);}
+// רעם: סדק חד ואז גלגול נמוך וארוך
+function thunder(){if(muted)return;try{const a=ac(),t=a.currentTime;
+  const c=noise(a,.3),hp=a.createBiquadFilter(),cg=a.createGain();hp.type='highpass';hp.frequency.value=1800;env(a,cg,t,.25,.005,.22);c.connect(hp);hp.connect(cg);cg.connect(master);c.start(t);
+  const r=noise(a,2.6,true),lp=a.createBiquadFilter(),rg=a.createGain();lp.type='lowpass';lp.frequency.setValueAtTime(700,t);lp.frequency.exponentialRampToValueAtTime(120,t+2.4);
+  env(a,rg,t,.9,.06,2.3);const lfo=a.createOscillator(),lg=a.createGain();lfo.frequency.value=5;lg.gain.value=.3;lfo.connect(lg);lg.connect(rg.gain);
+  r.connect(lp);lp.connect(rg);rg.connect(master);r.start(t);lfo.start(t);lfo.stop(t+2.6);}catch(e){}}
+// קרן מלחמה: אקורד נחושת נמוך שמתעצם
+function horn(delay){if(muted)return;try{const a=ac(),t=a.currentTime+delay,lp=a.createBiquadFilter(),g=a.createGain();
+  lp.type='lowpass';lp.Q.value=2;lp.frequency.setValueAtTime(250,t);lp.frequency.exponentialRampToValueAtTime(1500,t+.35);lp.frequency.exponentialRampToValueAtTime(500,t+1.4);
+  g.gain.setValueAtTime(.0001,t);g.gain.exponentialRampToValueAtTime(.16,t+.25);g.gain.setValueAtTime(.16,t+.9);g.gain.exponentialRampToValueAtTime(.0001,t+1.6);
+  lp.connect(g);g.connect(master);
+  for(const fr of[55,82.41,110,164.81])for(const dt of[-7,7]){const o=a.createOscillator();o.type='sawtooth';o.frequency.value=fr;o.detune.value=dt;o.connect(lp);o.start(t);o.stop(t+1.7);}}catch(e){}}
+// חבטה: תוף עמוק + תת-בס + פיצוץ אבק
+function boom(delay=0){if(muted)return;try{const a=ac(),t=a.currentTime+delay;
+  const o=a.createOscillator(),g=a.createGain();o.type='sine';o.frequency.setValueAtTime(150,t);o.frequency.exponentialRampToValueAtTime(38,t+.45);env(a,g,t,1,.005,.9);o.connect(g);g.connect(master);o.start(t);o.stop(t+1);
+  const sub=a.createOscillator(),sg=a.createGain();sub.frequency.value=46;env(a,sg,t,.5,.02,1.3);sub.connect(sg);sg.connect(master);sub.start(t);sub.stop(t+1.4);
+  const n=noise(a,.6,true),lp=a.createBiquadFilter(),ng=a.createGain();lp.type='lowpass';lp.frequency.value=900;env(a,ng,t,.7,.005,.45);n.connect(lp);lp.connect(ng);ng.connect(master);n.start(t);}catch(e){}}
 const RM=window.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 /* ---------- currency: ז'ירז'ורים, a golden fish ---------- */
@@ -165,7 +188,7 @@ const TYPES={
   ferret:{hp:120,speed:36,dmg:14,rate:1.2,reward:14,size:1.2,fur:'#dcc8a0',tunic:'#3f1f66',long:true},
   boss:{hp:650,speed:26,dmg:24,rate:1.4,reward:120,size:2.1,fur:'#5d4c40',tunic:'#4b1d7a',red:true,boss:true}
 };
-const TAUNTS=['אף עכברוש לא עובר את המעבר.','הגרעינים שלנו. לא שלהם.','חזור עם המגן שלך, או עליו.','החצים שלהם יסתירו את השמש? אז נילחם בצל.','בוא לקחת אותם.'];
+const TAUNTS=['אף עכברוש לא עובר את המעבר.','הדאודורנט שלנו. לא שלהם.','חזור עם המגן שלך, או עליו.','החצים שלהם יסתירו את השמש? אז נילחם בצל.','בוא לקחת אותם.'];
 const SHOP=[
   {id:'spear',name:'חנית מושחזת',desc:'נזק גבוה ב-25% לך ולהופליטים',cost:l=>20+l*18,max:8},
   {id:'shield',name:'מגן ברונזה',desc:'עוד 20 חיים מקסימליים, חסימה חזקה יותר והופליטים עמידים יותר',cost:l=>18+l*16,max:6},
@@ -174,7 +197,7 @@ const SHOP=[
   {id:'rage',name:'זעם ספרטני',desc:'<bdi>THIS IS SPARTA!</bdi> נטענת מהר יותר ב-15%',cost:l=>25+l*20,max:5},
   {id:'might',name:'רגל של ברונזה',desc:'<bdi>THIS IS SPARTA!</bdi> חזקה יותר ב-35% ומעיפה רחוק יותר',cost:l=>25+l*22,max:6},
   {id:'heal',name:'סעודת גרעינים',desc:'ריפוי מלא לליאונידס',cost:()=>15,max:Infinity,repeat:true},
-  {id:'repair',name:'חיזוק האסם',desc:'מוסיף 40 לאסם, עד המקסימום',cost:()=>15,max:Infinity,repeat:true}
+  {id:'repair',name:'מילוי ג\'ל',desc:'מוסיף 40 לדאודורנט, עד המקסימום',cost:()=>15,max:Infinity,repeat:true}
 ];
 
 /* ---------- background shapes ---------- */
@@ -231,10 +254,10 @@ function hitBlocker(b,d,e){
     if(p.hp<=0){p.hp=0;gameOver('player');}
   }else if(b.kind==='ally'){const a=b.ref;a.hp-=d;a.hurt=.2;
     if(a.hp<=0&&!a.dead){a.dead=true;puff(a.x,GROUND-20,14,'#e8a64b');floatText(a.x,GROUND-80,'הופליט נפל','#ff9a8a',14,1.2);}
-  }else{G.granary.hp-=d;G.shake=Math.max(G.shake,3);floatText(64,GROUND-130,'-'+d,'#ff7a6b',16,.8);
+  }else{G.granary.hp-=d;G.shake=Math.max(G.shake,3);floatText(62,GROUND-178,'-'+d,'#ff7a6b',16,.8);
     if(G.granary.hp<=0){G.granary.hp=0;gameOver('granary');}}
 }
-/* חץ: נורה בקשת אל היעד ופוגע בחוסם הראשון שהוא חוצה (ליאונידס, הופליט או האסם) */
+/* חץ: נורה בקשת אל היעד ופוגע בחוסם הראשון שהוא חוצה (ליאונידס, הופליט או הדאודורנט) */
 const ARROW_G=700;
 function shoot(e,tb){
   const sx=e.x-6,sy=GROUND+e.yo-30*e.T.size,tx=tb.x+rnd(-6,6),ty=GROUND-44;
@@ -260,10 +283,10 @@ function doKick(){
   const p=G.player;p.kickCd=p.kickMax;p.kickAnim=0;
   let near=null;for(const e of G.enemies)if(!near||Math.abs(e.x-p.x)<Math.abs(near.x-p.x))near=e;
   if(near)p.facing=near.x>=p.x?1:-1; // מסתובב אל האויב הקרוב
-  G.fury={t:0,hit:false,x:p.x,f:p.facing,bolt:makeBolt(p.x)};G.shake=10;G.banner=null;thunder();shout();
+  G.fury={t:0,hit:false,x:p.x,f:p.facing,bolt:makeBolt(p.x)};G.shake=10;G.banner=null;thunder();horn(.22);
 }
 function furyImpact(){
-  const p=G.player,F=G.fury,m=G.up.might;F.hit=true;G.shake=26;sfx('kick');sfx('boom');G.arrows=[];
+  const p=G.player,F=G.fury,m=G.up.might;F.hit=true;G.shake=26;boom();G.arrows=[];
   dust(p.x+F.f*60,GROUND,30,'#d8b98a');
   const dmg=(30+G.wave*4)*Math.pow(1.35,m),push=170*(1+m*.08);
   for(const e of G.enemies){const dx=(e.x-p.x)*F.f;if(dx>-30&&dx<260+e.r){damage(e,dmg*rnd(.9,1.1),0);const away=e.x>=p.x?1:-1;e.x=Math.max(130,e.x+away*(e.T.boss?push*.3:push));e.stun=1.8;}}
@@ -279,7 +302,7 @@ function gameOver(reason){
   if(state==='over')return;state='over';G.fury=null;G.overT=1.3;sfx('die');
   const best=Math.max(store.get('leo_best',0),G.wave);store.set('leo_best',best);
   if(reason==='player'){$('overTitle').textContent='ליאונידס נפל';$('overMsg').textContent='הוא נפל בקרב, והאגדה שלו תסופר בכל כלוב.';puff(G.player.x,GROUND-30,20,'#e8a64b');}
-  else{$('overTitle').textContent='האסם נפרץ';$('overMsg').textContent='העכברושים פרצו לאסם ובזזו את כל הגרעינים. המלך חולדה חוגג.';}
+  else{$('overTitle').textContent='הדאודורנט נפל';$('overMsg').textContent='העכברושים לקחו את האנטי ז\'לל. מעכשיו כל המעבר מסריח, והמלך חולדה חוגג.';}
   $('oWave').textContent=G.wave;$('oKills').textContent=G.kills;$('oBest').textContent=best;
 }
 
@@ -406,17 +429,24 @@ function drawFG(){
   for(const t of tufts){const[x,y,s]=t;if(y<GROUND+22)continue;for(let k=-2;k<=2;k++){ctx.beginPath();ctx.moveTo(x,y);ctx.quadraticCurveTo(x+k*3*s,y-8*s,x+k*5*s,y-14*s);ctx.stroke();}}
   const v=ctx.createRadialGradient(W/2,H/2,H*.4,W/2,H/2,H*.95);v.addColorStop(0,'#0000');v.addColorStop(1,'#0007');ctx.fillStyle=v;ctx.fillRect(0,0,W,H);
 }
-function seed(x,y){ctx.save();ctx.translate(x,y);ctx.rotate(.5);ell(0,0,6,3.4,'#2b2320');ctx.strokeStyle='#e8e0d0';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(-4,0);ctx.lineTo(4,0);ctx.stroke();ctx.restore();}
-function drawGranary(){
-  const gr=G.granary,x=14,y=GROUND-96;
-  ell(62,GROUND+4,64,10,'#00000040');
-  ctx.fillStyle='#e9dcc0';ctx.fillRect(x-4,GROUND-14,104,14);
-  for(let i=0;i<4;i++){ctx.fillStyle='#d9c8a4';ctx.fillRect(x+8+i*24,y+20,10,62);ctx.fillStyle='#bfa77e';ctx.fillRect(x+15+i*24,y+20,3,62);}
-  ctx.fillStyle='#efe2c6';ctx.fillRect(x-2,y+10,100,12);
-  ctx.fillStyle='#b8281f';ctx.beginPath();ctx.moveTo(x-6,y+11);ctx.lineTo(x+48,y-18);ctx.lineTo(x+102,y+11);ctx.closePath();ctx.fill();
-  ctx.fillStyle='#efe2c6';ctx.beginPath();ctx.moveTo(x+12,y+7);ctx.lineTo(x+48,y-9);ctx.lineTo(x+84,y+7);ctx.closePath();ctx.fill();
-  const n=Math.ceil(Math.max(0,gr.hp)/gr.max*22);
-  for(let i=0;i<n;i++){const row=Math.floor(i/6),col=i%6;seed(x+16+col*13+(row%2)*6,GROUND-20-row*7);}
+/* דאודורנט "אנטי ז'לל": מה שליאונידס שומר עליו. חלון הג'ל מראה כמה חיים נשארו, סדקים מתחת ל-50%, צחנה ירוקה מתחת ל-30% */
+function drawDeo(){
+  const gr=G.granary,k=Math.max(0,gr.hp)/gr.max,L=24,R=100,top=GROUND-128,cx=(L+R)/2;
+  ell(cx,GROUND+4,52,9,'#00000045');
+  const bg=ctx.createLinearGradient(L,0,R,0);bg.addColorStop(0,'#9fc3e6');bg.addColorStop(.35,'#f4faff');bg.addColorStop(.7,'#d6e8f8');bg.addColorStop(1,'#7fa6cc');
+  ctx.fillStyle=bg;ctx.beginPath();ctx.roundRect(L,top,R-L,GROUND-top,[6,6,10,10]);ctx.fill();ctx.strokeStyle='#4a6f96';ctx.lineWidth=2;ctx.stroke();
+  const cg=ctx.createLinearGradient(L-3,0,R+3,0);cg.addColorStop(0,'#173f7a');cg.addColorStop(.35,'#3f7fd0');cg.addColorStop(1,'#12305e');
+  ctx.fillStyle=cg;ctx.beginPath();ctx.roundRect(L-3,top-36,R-L+6,40,[18,18,4,4]);ctx.fill();
+  ctx.fillStyle='#ffffff40';ctx.fillRect(L+10,top-30,7,28);ctx.fillStyle='#0f2a52';ctx.fillRect(L-3,top-2,R-L+6,5);
+  ctx.fillStyle='#fff';ctx.fillRect(L,top+18,R-L,52);ctx.fillStyle='#2bb3a3';ctx.fillRect(L,top+18,R-L,6);ctx.fillRect(L,top+64,R-L,6);
+  txt('אנטי',cx,top+42,'19px "Suez One",serif','#173f7a',0);txt("ז'לל",cx,top+62,'21px "Suez One",serif','#c0281f',0);
+  const wy=GROUND-46,wh=34;ctx.fillStyle='#0a1a2c55';ctx.fillRect(cx-9,wy,18,wh);
+  ctx.fillStyle=k>.3?'#7fe0d0':'#e0b04a';ctx.fillRect(cx-9,wy+wh*(1-k),18,wh*k);ctx.strokeStyle='#4a6f96';ctx.lineWidth=1.5;ctx.strokeRect(cx-9,wy,18,wh);
+  for(const[sx,sy]of[[L+12,top+8],[R-14,top+92]]){ctx.fillStyle='#fff';ctx.globalAlpha=.6+.4*Math.sin(G.time*3+sx);star(sx,sy,4);ctx.globalAlpha=1;}
+  if(k<.5){ctx.strokeStyle='#2a3a4a';ctx.lineWidth=1.6;ctx.beginPath();ctx.moveTo(R-6,top+80);ctx.lineTo(R-18,top+92);ctx.lineTo(R-12,top+100);ctx.lineTo(R-26,top+112);
+    if(k<.25){ctx.moveTo(L+4,top+20);ctx.lineTo(L+16,top+30);ctx.lineTo(L+10,top+40);}ctx.stroke();}
+  if(k<.3){ctx.strokeStyle='#7cbf3a99';ctx.lineWidth=3;for(let i=0;i<3;i++){const ph=(G.time*.8+i/3)%1,x0=L+18+i*22,y0=top-40-ph*50;ctx.globalAlpha=1-ph;
+    ctx.beginPath();ctx.moveTo(x0,y0);ctx.bezierCurveTo(x0+8,y0-8,x0-8,y0-16,x0,y0-24);ctx.stroke();}ctx.globalAlpha=1;}
 }
 function drawHamster(x,y,s,f,o){
   ctx.save();ctx.translate(x,y);
@@ -588,7 +618,7 @@ function drawBossBar(){
 function draw(){
   ctx.setTransform(cv.width/W,0,0,cv.height/H,0,0);
   ctx.save();const sh=G.shake;if(sh>0)ctx.translate(rnd(-sh,sh)*.5,rnd(-sh,sh)*.5);
-  drawBG();drawGranary();
+  drawBG();drawDeo();
   for(const a of[...G.allies].sort((a,b)=>a.yo-b.yo))drawHamster(a.x,GROUND+a.yo,.82,1,{atk:a.atk,hurt:a.hurt,walk:0});
   const F=G.fury;if(F)drawFuryBack();
   for(const e of G.enemies)drawRodent(e);
