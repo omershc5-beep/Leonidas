@@ -221,7 +221,7 @@ function hitBlocker(b,d,e){
 function doKick(){
   const p=G.player;p.kickCd=p.kickMax;p.kickAnim=.35;G.shake=14;sfx('kick');
   floatText(p.x,GROUND-122,'זאת ספרטה!','#ffd36b',30,1.4);dust(p.x+p.facing*40,GROUND,18,'#d8b98a');
-  for(const e of G.enemies){const dx=(e.x-p.x)*p.facing;if(dx>-20&&dx<170+e.r){damage(e,8+G.wave,0);e.x=Math.max(130,e.x+p.facing*(e.T.boss?35:140));e.stun=1.3;}}
+  for(const e of G.enemies){const dx=(e.x-p.x)*p.facing;if(dx>-20&&dx<170+e.r){damage(e,8+G.wave,0);const away=e.x>=p.x?1:-1;e.x=Math.max(130,e.x+away*(e.T.boss?35:140));e.stun=1.3;}}
 }
 function gameOver(reason){
   if(state==='over')return;state='over';G.overT=1.3;sfx('die');
