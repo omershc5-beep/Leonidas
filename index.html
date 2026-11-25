@@ -141,13 +141,14 @@ const ro=new ResizeObserver(resize);ro.observe(cv);
 
 /* ---------- sound ---------- */
 let actx=null,muted=store.get('leo_muted',false);
-const SFX={hit:[220,90,'square',.07,.1],stab:[520,260,'triangle',.05,.07],hurt:[150,60,'sawtooth',.09,.18],kick:[110,35,'sawtooth',.16,.4],coin:[880,1320,'sine',.05,.1],block:[760,520,'square',.04,.06],wave:[330,660,'triangle',.09,.5],die:[300,50,'sawtooth',.12,.9]};
+const SFX={bow:[900,380,'triangle',.05,.09],hit:[220,90,'square',.07,.1],stab:[520,260,'triangle',.05,.07],hurt:[150,60,'sawtooth',.09,.18],kick:[110,35,'sawtooth',.16,.4],coin:[880,1320,'sine',.05,.1],block:[760,520,'square',.04,.06],wave:[330,660,'triangle',.09,.5],die:[300,50,'sawtooth',.12,.9]};
 function sfx(n){if(muted)return;try{if(!actx)actx=new(window.AudioContext||window.webkitAudioContext)();const S=SFX[n],t=actx.currentTime,o=actx.createOscillator(),g=actx.createGain();o.type=S[2];o.frequency.setValueAtTime(S[0],t);o.frequency.exponentialRampToValueAtTime(S[1],t+S[4]);g.gain.setValueAtTime(S[3],t);g.gain.exponentialRampToValueAtTime(.0001,t+S[4]);o.connect(g);g.connect(actx.destination);o.start(t);o.stop(t+S[4]+.02);}catch(e){}}
 
 /* ---------- data ---------- */
 const TYPES={
   mouse:{hp:22,speed:78,dmg:4,rate:.8,reward:3,size:.75,fur:'#a3a3a8',tunic:'#6b3fa0'},
   rat:{hp:48,speed:54,dmg:8,rate:1,reward:6,size:1,fur:'#7d6b5d',tunic:'#5a2d86',red:true},
+  archer:{hp:30,speed:60,dmg:7,rate:2.2,reward:8,size:.9,fur:'#8f8278',tunic:'#7a2f86',ranged:true,range:250},
   ferret:{hp:120,speed:36,dmg:14,rate:1.2,reward:14,size:1.2,fur:'#dcc8a0',tunic:'#3f1f66',long:true},
   boss:{hp:650,speed:26,dmg:24,rate:1.4,reward:120,size:2.1,fur:'#5d4c40',tunic:'#4b1d7a',red:true,boss:true}
 };
@@ -173,7 +174,7 @@ const keys={},touch={left:false,right:false,attack:false,block:false};
 function newGame(){
   G={wave:0,seeds:0,kills:0,time:0,shake:0,overT:0,endT:0,
     player:{x:360,hp:100,maxHp:100,dmg:12,cd:0,rate:.38,reach:85,speed:230,facing:1,blocking:false,blockRed:.7,kickCd:0,kickMax:7,hurt:0,atk:0,walk:0,kickAnim:0},
-    granary:{hp:100,max:100},allies:[],enemies:[],parts:[],texts:[],
+    granary:{hp:100,max:100},allies:[],enemies:[],arrows:[],parts:[],texts:[],
     spawnQ:[],spawnT:0,spawnInt:1.2,waveActive:false,banner:null,up:{spear:0,shield:0,train:0}};
 }
 function inp(){return{left:keys.ArrowLeft||keys.KeyA||touch.left,right:keys.ArrowRight||keys.KeyD||touch.right,attack:keys.Space||keys.KeyJ||touch.attack,block:keys.ShiftLeft||keys.ShiftRight||keys.KeyS||keys.ArrowDown||keys.KeyK||touch.block}}
@@ -183,17 +184,17 @@ function blur(){if(document.activeElement&&document.activeElement.blur)document.
 function startGame(){newGame();startWave();}
 function startWave(){
   G.wave++;const n=G.wave,q=[];
-  const mice=Math.min(4+n*2,26),rats=Math.max(0,Math.min(n*2-2,22)),fer=Math.max(0,Math.min(n-3,12));
-  for(let i=0;i<mice;i++)q.push('mouse');for(let i=0;i<rats;i++)q.push('rat');for(let i=0;i<fer;i++)q.push('ferret');
+  const mice=Math.min(4+n*2,26),rats=Math.max(0,Math.min(n*2-2,22)),fer=Math.max(0,Math.min(n-3,12)),arc=Math.max(0,Math.min(n-1,10));
+  for(let i=0;i<mice;i++)q.push('mouse');for(let i=0;i<rats;i++)q.push('rat');for(let i=0;i<fer;i++)q.push('ferret');for(let i=0;i<arc;i++)q.push('archer');
   for(let i=q.length-1;i>3;i--){const j=3+Math.floor(Math.random()*(i-2));[q[i],q[j]]=[q[j],q[i]];}
   const boss=n%5===0;if(boss)q.push('boss');
-  G.spawnQ=q;G.spawnInt=Math.max(.42,1.35-n*.07);G.spawnT=1.2;G.waveActive=true;G.endT=0;
-  banner(boss?`גל ${n}: המלך חולדה בא בעצמו`:`גל ${n}`,boss?'הכינו את המגינים!':pick(TAUNTS));
+  G.arrows=[];G.spawnQ=q;G.spawnInt=Math.max(.42,1.35-n*.07);G.spawnT=1.2;G.waveActive=true;G.endT=0;
+  banner(boss?`גל ${n}: המלך חולדה בא בעצמו`:`גל ${n}`,boss?'הכינו את המגינים!':arc===1?'קשתי עכברושים! הרם מגן מול החצים':pick(TAUNTS));
   sfx('wave');state='play';showOv(null);blur();
 }
 function spawn(type){
   const T=TYPES[type],sc=1+(G.wave-1)*.09,hp=Math.round(T.hp*sc*(T.boss?G.wave/5:1));
-  G.enemies.push({T,x:W+40+rnd(0,30),hp,max:hp,r:22*T.size,cd:rnd(0,.5),stun:0,flash:0,lunge:0,walk:rnd(0,6),yo:T.boss?0:rnd(-5,5)});
+  G.enemies.push({T,x:W+40+rnd(0,30),hp,max:hp,r:22*T.size,cd:rnd(0,.5),stun:0,flash:0,lunge:0,walk:rnd(0,6),yo:T.boss?0:T.ranged?rnd(-14,-8):rnd(-5,5)});
   if(T.boss){banner('המלך חולדה הגיע!','הפל אותו והגל ייגמר בכבוד',2.5);G.shake=12;}
 }
 function makeAlly(){const hp=60+G.up.shield*12;return{x:300,yo:0,hp,max:hp,dmg:6,rate:.9,reach:80,cd:rnd(0,.5),atk:0,hurt:0};}
@@ -217,6 +218,23 @@ function hitBlocker(b,d,e){
     if(a.hp<=0&&!a.dead){a.dead=true;puff(a.x,GROUND-20,14,'#e8a64b');floatText(a.x,GROUND-80,'הופליט נפל','#ff9a8a',14,1.2);}
   }else{G.granary.hp-=d;G.shake=Math.max(G.shake,3);floatText(64,GROUND-130,'-'+d,'#ff7a6b',16,.8);
     if(G.granary.hp<=0){G.granary.hp=0;gameOver('granary');}}
+}
+/* חץ: נורה בקשת אל היעד ופוגע בחוסם הראשון שהוא חוצה (ליאונידס, הופליט או האסם) */
+const ARROW_G=700;
+function shoot(e,tb){
+  const sx=e.x-6,sy=GROUND+e.yo-30*e.T.size,tx=tb.x+rnd(-6,6),ty=GROUND-44;
+  const t=Math.max(.35,(sx-tx)/430),vx=(tx-sx)/t,vy=(ty-sy-.5*ARROW_G*t*t)/t;
+  G.arrows.push({x:sx,y:sy,vx,vy,sx,dmg:e.T.dmg*(1+(G.wave-1)*.05),stuck:0});sfx('bow');
+}
+function updateArrows(dt,blockers){
+  for(const a of G.arrows){
+    if(a.stuck){a.stuck-=dt;continue;}
+    const px=a.x;a.x+=a.vx*dt;a.vy+=ARROW_G*dt;a.y+=a.vy*dt;
+    if(a.y>GROUND-120){let hit=null;for(const b of blockers)if(px>b.x+10&&a.x<=b.x+10&&(!hit||b.x>hit.x))hit=b;
+      if(hit){a.dead=true;hitBlocker(hit,a.dmg,{x:a.sx});if(state!=='play')return;continue;}}
+    if(a.y>=GROUND+4){a.y=GROUND+4;a.stuck=1.2;}
+  }
+  G.arrows=G.arrows.filter(a=>!a.dead&&(a.stuck===0||a.stuck>0)&&a.x>-20);
 }
 function doKick(){
   const p=G.player;p.kickCd=p.kickMax;p.kickAnim=.35;G.shake=14;sfx('kick');
@@ -313,11 +331,16 @@ function update(dt){
     if(e.stun>0){e.stun-=dt;continue;}
     let tb=null;for(const b of blockers)if(b.x<e.x&&(!tb||b.x>tb.x))tb=b;
     if(!tb)tb=blockers[0];
-    let limit=tb.x+16+e.r,byFriend=false;
-    if(i>0){const o=G.enemies[i-1],fl=o.x+(o.r+e.r)*.55;if(fl>limit){limit=fl;byFriend=true;}}
+    const R=e.T.ranged;
+    let limit=tb.x+(R?e.T.range:16+e.r),byFriend=false;
+    // לוחמי קרב עוברים על פני קשתים, כדי לא להיתקע מאחוריהם
+    let j=i-1;if(!R)while(j>=0&&G.enemies[j].T.ranged)j--;
+    if(j>=0){const o=G.enemies[j],fl=o.x+(o.r+e.r)*.55;if(fl>limit){limit=fl;byFriend=true;}}
     if(e.x>limit){e.x=Math.max(limit,e.x-e.T.speed*dt);e.walk+=dt*e.T.speed*.12;}
-    else if(!byFriend&&e.cd<=0){e.cd=e.T.rate;e.lunge=.2;hitBlocker(tb,e.T.dmg*(1+(G.wave-1)*.05),e);if(state!=='play')return;}
+    if(R){if(e.cd<=0&&e.x<=tb.x+e.T.range+40){e.cd=e.T.rate*rnd(.85,1.15);e.lunge=.25;shoot(e,tb);}}
+    else if(e.x<=limit&&!byFriend&&e.cd<=0){e.cd=e.T.rate;e.lunge=.2;hitBlocker(tb,e.T.dmg*(1+(G.wave-1)*.05),e);if(state!=='play')return;}
   }
+  updateArrows(dt,blockers);if(state!=='play')return;
   if(G.waveActive&&!G.spawnQ.length&&!G.enemies.length){
     G.waveActive=false;const bonus=10+G.wave*3;G.seeds+=bonus;banner(`גל ${G.wave} נהדף!`,`בונוס: ${bonus} גרעינים`,1.8);G.endT=1.9;
   }
@@ -418,6 +441,10 @@ function drawRodent(e){
   if(T.boss){ctx.strokeStyle='#e0b040';ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(hx-4,-4);ctx.lineTo(hx+14,-46);ctx.stroke();
     ctx.beginPath();ctx.moveTo(hx+8,-44);ctx.lineTo(hx+16,-52);ctx.moveTo(hx+14,-46);ctx.lineTo(hx+16,-56);ctx.moveTo(hx+20,-42);ctx.lineTo(hx+22,-50);ctx.stroke();
     ctx.fillStyle='#ffcf3a';ctx.beginPath();ctx.moveTo(hx-9,-29);ctx.lineTo(hx-9,-40);ctx.lineTo(hx-4,-34);ctx.lineTo(hx,-43);ctx.lineTo(hx+4,-34);ctx.lineTo(hx+9,-40);ctx.lineTo(hx+9,-29);ctx.closePath();ctx.fill();}
+  else if(T.ranged){const pull=e.lunge>0?0:5;
+    ctx.strokeStyle='#6b4423';ctx.lineWidth=2.5;ctx.beginPath();ctx.arc(hx+4,-24,15,-1.25,1.25);ctx.stroke();
+    ctx.strokeStyle='#eee8';ctx.lineWidth=.8;ctx.beginPath();ctx.moveTo(hx+4+15*Math.cos(1.25),-24-15*Math.sin(1.25));ctx.lineTo(hx+4-pull,-24);ctx.lineTo(hx+4+15*Math.cos(1.25),-24+15*Math.sin(1.25));ctx.stroke();
+    ctx.fillStyle='#5a3a20';ctx.fillRect(-20,-38,7,18);ctx.fillStyle='#c33';ctx.fillRect(-21,-42,3,5);ctx.fillRect(-16,-43,3,5);}
   else{ctx.strokeStyle='#6b4423';ctx.lineWidth=T.long?4:(T.red?3:1.6);ctx.beginPath();ctx.moveTo(hx-2,-8);ctx.lineTo(hx+16,-34);ctx.stroke();
     if(T.red)ell(hx+17,-36,4,4,'#5a3a20');if(T.long){ell(hx+17,-36,6,6,'#555');star(hx+17,-36,9);}}
   ctx.restore();
@@ -426,6 +453,12 @@ function drawRodent(e){
 }
 const isHe=t=>/[֐-׿]/.test(t);
 function txt(t,x,y,font,fill,strokeW){ctx.direction=isHe(t)?'rtl':'ltr';ctx.textAlign='center';ctx.font=font;ctx.lineJoin='round';if(strokeW){ctx.strokeStyle='#000c';ctx.lineWidth=strokeW;ctx.strokeText(t,x,y);}ctx.fillStyle=fill;ctx.fillText(t,x,y);}
+function drawArrows(){
+  for(const a of G.arrows){ctx.save();ctx.translate(a.x,a.y);ctx.rotate(Math.atan2(a.vy,a.vx));if(a.stuck)ctx.globalAlpha=Math.min(1,a.stuck*2);
+    ctx.strokeStyle='#6b4423';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(-22,0);ctx.lineTo(0,0);ctx.stroke();
+    ctx.fillStyle='#ccc';ctx.beginPath();ctx.moveTo(6,0);ctx.lineTo(0,-3);ctx.lineTo(0,3);ctx.closePath();ctx.fill();
+    ctx.fillStyle='#b8281f';ctx.fillRect(-22,-3,6,2);ctx.fillRect(-22,1,6,2);ctx.restore();}
+}
 function drawParts(){for(const p of G.parts){ctx.globalAlpha=Math.max(0,p.life/p.max);ell(p.x,p.y,p.sz,p.sz,p.c);}ctx.globalAlpha=1;}
 function drawTexts(){for(const t of G.texts){ctx.globalAlpha=Math.min(1,t.life/t.max*2);txt(t.t,t.x,t.y,`900 ${t.sz}px Heebo,sans-serif`,t.c,4);}ctx.globalAlpha=1;}
 function drawBanner(){
@@ -449,7 +482,7 @@ function draw(){
   for(const e of G.enemies)drawRodent(e);
   const p=G.player;
   drawHamster(p.x,GROUND+4,1.22,p.facing,{atk:p.atk,hurt:p.hurt,block:p.blocking&&state==='play',walk:p.walk,kick:p.kickAnim,leader:true,dead:p.hp<=0});
-  drawParts();drawTexts();drawFG();
+  drawArrows();drawParts();drawTexts();drawFG();
   ctx.restore();
   drawBossBar();if(G.banner)drawBanner();
 }
