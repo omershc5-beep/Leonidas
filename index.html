@@ -287,7 +287,7 @@ function update(dt){
   if(mv){p.facing=mv;p.walk+=dt*12;}else p.walk=0;
   p.x+=mv*p.speed*(p.blocking?.45:1)*dt;
   let front=null;for(const e of G.enemies)if(e.x>=p.x-5&&(!front||e.x<front.x))front=e;
-  if(front&&p.x>front.x-front.r-18)p.x=front.x-front.r-18;
+  if(front&&p.x>front.x-front.r-14)p.x=front.x-front.r-14;
   p.x=Math.max(110,Math.min(W-40,p.x));
   if(I.attack&&!p.blocking&&p.cd<=0){
     p.cd=p.rate*Math.pow(.88,G.up.train);p.atk=.14;sfx('stab');
