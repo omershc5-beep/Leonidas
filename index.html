@@ -20,7 +20,7 @@ html,body{height:100%;background:radial-gradient(ellipse at 50% 40%,#2c1712,var(
 canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
 #hud{position:absolute;top:0;inset-inline:0;display:flex;justify-content:space-between;align-items:flex-start;gap:10px;padding:1.4% 1.8%;pointer-events:none;font-size:clamp(11px,1.5vw,15px)}
 .bars{display:grid;gap:5px;width:min(42%,300px)}
-.bar{display:grid;grid-template-columns:5.2em 1fr 3.6em;align-items:center;gap:6px;text-shadow:0 1px 2px #000}
+.bar{display:grid;grid-template-columns:6.2em 1fr 3.6em;align-items:center;gap:6px;text-shadow:0 1px 2px #000}
 .bar span{font-weight:700}
 .track{height:.8em;background:#0008;border:1.5px solid var(--bronze);border-radius:99px;overflow:hidden}
 .fill{height:100%;width:100%;border-radius:99px;transition:width .15s}
@@ -87,7 +87,7 @@ kbd{font:700 12px Heebo,sans-serif;background:#f6e7c8;color:#2a1411;border-radiu
 <canvas id="cv"></canvas>
 <div id="hud">
   <div class="bars">
-    <div class="bar"><span>ליאונידס</span><div class="track"><div id="hpFill" class="fill hp"></div></div><b id="hpTxt">100</b></div>
+    <div class="bar"><span id="hpName">ליאונידס</span><div class="track"><div id="hpFill" class="fill hp"></div></div><b id="hpTxt">100</b></div>
     <div class="bar"><span>דאודורנט</span><div class="track"><div id="grFill" class="fill gr"></div></div><b id="grTxt">100</b></div>
   </div>
   <div class="stats">
@@ -156,6 +156,8 @@ const $=id=>document.getElementById(id);
 const cv=$('cv'),ctx=cv.getContext('2d');
 const store={get(k,d){try{const v=localStorage.getItem(k);return v===null?d:JSON.parse(v)}catch(e){return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
 const CASH=1.15; // מכפיל הכסף: +15% לכל פרס
+/* חיזוק האויבים בכל גל: חיים +9% ונזק +5% (ליניארי), ועוד extra=2% מצטבר על שניהם. אחרי גל cap הם מפסיקים להתחזק */
+const GROW={extra:1.02,cap:35};
 const GEL=5; // מחיר נקודת ג'ל אחת בחנות
 const rnd=(a,b)=>a+Math.random()*(b-a);
 const pick=a=>a[Math.floor(Math.random()*a.length)];
@@ -266,8 +268,9 @@ function startWave(){
   sfx('wave');state='play';showOv(null);blur();for(const k in keys)keys[k]=false;
 }
 function spawn(type){
-  const T=TYPES[type],sc=1+(G.wave-1)*.09,hp=Math.round(T.hp*sc*(T.boss?G.wave/5:1));
-  G.enemies.push({T,x:W+40+rnd(0,30),hp,max:hp,r:22*T.size,cd:rnd(0,.5),stun:0,flash:0,lunge:0,walk:rnd(0,6),yo:T.boss?0:T.ranged?rnd(-14,-8):rnd(-5,5)});
+  const T=TYPES[type],w=Math.min(G.wave,GROW.cap),grow=Math.pow(GROW.extra,w-1),sc=(1+(w-1)*.09)*grow,hp=Math.round(T.hp*sc*(T.boss?w/5:1));
+  const mul=(T.fixed?1:1+(w-1)*.05)*grow; // מכפיל הנזק של האויב הזה
+  G.enemies.push({T,x:W+40+rnd(0,30),hp,max:hp,r:22*T.size,cd:rnd(0,.5),stun:0,flash:0,lunge:0,walk:rnd(0,6),mul,yo:T.boss?0:T.ranged?rnd(-14,-8):rnd(-5,5)});
   if(T.boss){banner('המלך חולדה הגיע!','הפל אותו והגל ייגמר בכבוד',2.5);G.shake=12;}
 }
 function makeAlly(){const hp=60+G.up.shield*12;return{x:300,yo:0,hp,max:hp,dmg:6,rate:.9,reach:80,cd:rnd(0,.5),atk:0,hurt:0};}
@@ -297,7 +300,7 @@ const ARROW_G=700;
 function shoot(e,tb){
   const sx=e.x-6,sy=GROUND+e.yo-30*e.T.size,tx=tb.x+rnd(-6,6),ty=GROUND-44;
   const t=Math.max(.35,(sx-tx)/430),vx=(tx-sx)/t,vy=(ty-sy-.5*ARROW_G*t*t)/t;
-  G.arrows.push({x:sx,y:sy,vx,vy,sx,dmg:e.T.dmg*(1+(G.wave-1)*.05),stuck:0});sfx('bow');
+  G.arrows.push({x:sx,y:sy,vx,vy,sx,dmg:e.T.dmg*e.mul,stuck:0});sfx('bow');
 }
 function updateArrows(dt,blockers){
   for(const a of G.arrows){
@@ -470,6 +473,7 @@ function update(dt){
   p.blocking=!!I.block;
   const mv=(I.right?1:0)-(I.left?1:0);
   if(mv){p.facing=mv;p.walk+=dt*12;}else p.walk=0;
+  if(G.tier&&(mv||Math.random()<.3)&&Math.random()<dt*14)G.parts.push({x:p.x+rnd(-20,20),y:GROUND-rnd(0,70)-p.z,vx:rnd(-20,20),vy:rnd(-70,-30),life:.6,max:.6,c:G.tier>1?pick(['#fff3b0','#ffd36b']):pick(['#ff7a4a','#ffb347']),sz:rnd(1.5,3),g:0}); // ניצוצות דרגה
   p.x+=mv*p.speed*(p.blocking?.45:1)*dt;
   if(wantJump){wantJump=false;if(G.tier>=1&&p.z<=0&&!G.fury){p.vz=520;sfx('jump');}}
   if(p.z>0||p.vz>0){p.vz-=1500*dt;p.z+=p.vz*dt;
@@ -513,7 +517,7 @@ function update(dt){
     if(j>=0){const o=G.enemies[j],fl=o.x+(o.r+e.r)*.55;if(fl>limit){limit=fl;byFriend=true;}}
     if(e.x>limit){e.x=Math.max(limit,e.x-e.T.speed*dt);e.walk+=dt*e.T.speed*.12;}
     if(R){if(e.cd<=0&&e.x<=tb.x+e.T.range+40){e.cd=e.T.rate*rnd(.85,1.15);e.lunge=.25;shoot(e,tb);}}
-    else if(e.x<=limit&&!byFriend&&e.cd<=0){e.cd=e.T.rate;e.lunge=.2;hitBlocker(tb,e.T.fixed?e.T.dmg:e.T.dmg*(1+(G.wave-1)*.05),e);if(state!=='play')return;}
+    else if(e.x<=limit&&!byFriend&&e.cd<=0){e.cd=e.T.rate;e.lunge=.2;hitBlocker(tb,e.T.dmg*e.mul,e);if(state!=='play')return;}
   }
   updateArrows(dt,blockers);if(state!=='play')return;
   updateCatches(dt);
@@ -603,9 +607,9 @@ function drawHamster(x,y,s,f,o){
     ctx.fillStyle='#ffe58a';ctx.strokeStyle='#b07a14';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(0,-54);ctx.quadraticCurveTo(-14,-66,-28,-62);ctx.quadraticCurveTo(-20,-58,-26,-54);ctx.quadraticCurveTo(-16,-52,-22,-46);ctx.quadraticCurveTo(-10,-46,0,-50);ctx.closePath();ctx.fill();ctx.stroke();}
   ctx.fillStyle=o.tier>1?'#ffd36b':'#8a5a1c';ctx.fillRect(7,-67,6,4);
   const shx=o.block?22:9,shy=o.block?-30:-20,shr=o.block?18:15;
-  const sg=ctx.createRadialGradient(shx-5,shy-6,2,shx,shy,shr);sg.addColorStop(0,'#ffd88a');sg.addColorStop(1,'#b47a2c');
-  ctx.fillStyle=sg;ctx.beginPath();ctx.arc(shx,shy,shr,0,Math.PI*2);ctx.fill();ctx.strokeStyle='#7c4f1c';ctx.lineWidth=2.5;ctx.stroke();
-  ctx.strokeStyle='#b8281f';ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(shx-7,shy+7);ctx.lineTo(shx,shy-8);ctx.lineTo(shx+7,shy+7);ctx.stroke();
+  const sg=ctx.createRadialGradient(shx-5,shy-6,2,shx,shy,shr),SC=o.tier>1?['#fff3b0','#d4a017','#8a5a10','#b8281f']:o.tier?['#f0675a','#8f1d16','#ffd36b','#ffd36b']:['#ffd88a','#b47a2c','#7c4f1c','#b8281f'];sg.addColorStop(0,SC[0]);sg.addColorStop(1,SC[1]);
+  ctx.fillStyle=sg;ctx.beginPath();ctx.arc(shx,shy,shr,0,Math.PI*2);ctx.fill();ctx.strokeStyle=SC[2];ctx.lineWidth=o.tier?3:2.5;ctx.stroke();
+  ctx.strokeStyle=SC[3];ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(shx-7,shy+7);ctx.lineTo(shx,shy-8);ctx.lineTo(shx+7,shy+7);ctx.stroke();
   ell(-6+thrust*.8,sy+5,4,4,fur);
   ctx.restore();
 }
@@ -850,6 +854,7 @@ function updateHud(){
   $('hpFill').style.width=(p.hp/p.maxHp*100)+'%';setT('hpTxt',Math.ceil(p.hp)+'/'+p.maxHp);
   $('grFill').style.width=(G.granary.hp/G.granary.max*100)+'%';setT('grTxt',Math.ceil(G.granary.hp));
   setT('seeds',Math.floor(G.seeds));setT('wave',G.wave);setT('kills',G.kills);
+  setT('hpName','ליאונידס'+(G.tier?' '+'★'.repeat(G.tier):''));
   const sh=G.tier>=2;$('throwTouch').hidden=!sh;$('throwChip').hidden=!(sh&&showThrow);
   if(sh&&showThrow){const r=p.spearT/THROW.back;$('throwBar').style.transform=`scaleX(${r})`;setT('throwTxt',r>0?`חנית ${Math.ceil(p.spearT)}`:'חנית (R)');}
   $('amitBtn').classList.toggle('off',!amitTarget()||G.granary.hp<=AMIT.cost);
