@@ -37,6 +37,10 @@ canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
 .chip.amit{pointer-events:auto;cursor:pointer;color:var(--ink);font:inherit;font-weight:700;border-color:#3f7fd0}
 .chip.amit.off{opacity:.45}
 .rbtns{display:grid;gap:4px}
+.opts{margin:14px auto 0;padding-top:12px;border-top:1px solid var(--bronze-d);max-width:28em;text-align:start}
+.opts h3{font:700 15px Heebo,sans-serif;color:var(--bronze);margin-bottom:6px}
+.opts label{display:flex;gap:8px;align-items:center;cursor:pointer}
+.opts input{width:18px;height:18px;accent-color:var(--red)}
 .card.wheel{grid-column:1/-1;flex-direction:row;align-items:center;gap:12px;border-color:var(--seed);background:linear-gradient(90deg,#3a2a0c88,#0005)}
 .card.wheel>svg{width:74px;height:74px;flex:none;animation:spin 6s linear infinite}
 .card.wheel .wbody{display:flex;flex-direction:column;gap:4px;flex:1}
@@ -91,6 +95,7 @@ kbd{font:700 12px Heebo,sans-serif;background:#f6e7c8;color:#2a1411;border-radiu
     <div class="chip">גל <b id="wave">0</b></div>
     <div class="chip">הובסו <b id="kills">0</b></div>
     <div class="chip kick"><i id="kickBar"></i><span id="kickTxt">זאת ספרטה! (E)</span></div>
+    <div class="chip kick" id="throwChip" hidden><i id="throwBar"></i><span id="throwTxt"></span></div>
     <button class="chip amit" id="amitBtn" title="עולה 10 ג'ל מהדאודורנט">🎣 עמית (Q)</button>
     <button class="ibtn" id="muteBtn" aria-label="השתקה">🔊</button>
     <button class="ibtn" id="pauseBtn" aria-label="השהיה">⏸</button>
@@ -98,7 +103,7 @@ kbd{font:700 12px Heebo,sans-serif;background:#f6e7c8;color:#2a1411;border-radiu
 </div>
 <div id="touch">
   <div class="grp"><button data-k="left" aria-label="שמאלה">◀</button><button data-k="jump" aria-label="קפיצה">▲</button><button data-k="right" aria-label="ימינה">▶</button></div>
-  <div class="grp"><button data-k="block">מגן</button><button data-k="amit">עמית</button><button data-k="kick">בעיטה</button><button data-k="attack" class="act">חנית</button></div>
+  <div class="grp"><button data-k="block">מגן</button><button data-k="throw" id="throwTouch" hidden>זריקה</button><button data-k="amit">עמית</button><button data-k="kick">בעיטה</button><button data-k="attack" class="act">חנית</button></div>
 </div>
 
 <div id="ovTitle" class="overlay on"><div class="panel">
@@ -111,6 +116,7 @@ kbd{font:700 12px Heebo,sans-serif;background:#f6e7c8;color:#2a1411;border-radiu
     <div><kbd>E</kbd> מתקפת <bdi>THIS IS SPARTA!</bdi></div>
     <div><kbd>Q</kbd> העמית המז'רז'ר דג דג מעמקים, תמורת 10 ג'ל</div>
     <div><kbd>↑</kbd> או <kbd>W</kbd> קפיצה (מהדרגה השנייה)</div>
+    <div><kbd>R</kbd> זריקת חנית (בדרגה השלישית)</div>
     <div><kbd>P</kbd> השהיה</div>
     <div>בין הגלים: שדרוגים וגיוס הופליטים</div>
   </div>
@@ -130,6 +136,7 @@ kbd{font:700 12px Heebo,sans-serif;background:#f6e7c8;color:#2a1411;border-radiu
   <h2>הפוגה בקרב</h2>
   <p class="tag">העכברושים מחכים. גם הם צריכים לנשום.</p>
   <button class="btn" id="resumeBtn">חזרה לקרב</button><button class="btn alt" id="pTitleBtn">למסך הפתיחה</button>
+  <div class="opts"><h3>הגדרות</h3><label><input type="checkbox" id="optThrow"> להציג כמה זמן נשאר עד שהחנית חוזרת אחרי זריקה</label></div>
 </div></div>
 
 <div id="ovOver" class="overlay"><div class="panel">
@@ -163,7 +170,7 @@ function ac(){
   if(actx.state==='suspended')actx.resume();return actx;
 }
 // [תדר התחלה, תדר סוף, צורת גל, עוצמה, משך]
-const SFX={bow:[900,380,'triangle',.05,.09],hit:[220,90,'square',.06,.1],stab:[520,260,'triangle',.05,.07],hurt:[150,60,'sawtooth',.08,.18],coin:[880,1320,'sine',.05,.1],block:[760,520,'square',.035,.06],wave:[330,660,'triangle',.09,.5],cast:[1400,260,'sine',.06,.4],jump:[300,720,'triangle',.05,.15],tick:[1300,900,'square',.015,.03],reel:[260,1100,'triangle',.05,.9],splash:[700,120,'sawtooth',.05,.25],die:[300,50,'sawtooth',.11,.9]};
+const SFX={bow:[900,380,'triangle',.05,.09],hit:[220,90,'square',.06,.1],stab:[520,260,'triangle',.05,.07],hurt:[150,60,'sawtooth',.08,.18],coin:[880,1320,'sine',.05,.1],block:[760,520,'square',.035,.06],wave:[330,660,'triangle',.09,.5],cast:[1400,260,'sine',.06,.4],jump:[300,720,'triangle',.05,.15],throw:[700,200,'sawtooth',.05,.22],ready:[900,1500,'sine',.05,.18],tick:[1300,900,'square',.015,.03],reel:[260,1100,'triangle',.05,.9],splash:[700,120,'sawtooth',.05,.25],die:[300,50,'sawtooth',.11,.9]};
 function sfx(n){if(muted)return;try{const a=ac(),S=SFX[n],t=a.currentTime,o=a.createOscillator(),f=a.createBiquadFilter(),g=a.createGain();
   o.type=S[2];o.frequency.setValueAtTime(S[0],t);o.frequency.exponentialRampToValueAtTime(S[1],t+S[4]);f.type='lowpass';f.frequency.value=2800; // מסנן שמרכך את הצרימה
   g.gain.setValueAtTime(S[3],t);g.gain.exponentialRampToValueAtTime(.0001,t+S[4]);o.connect(f);f.connect(g);g.connect(master);o.start(t);o.stop(t+S[4]+.02);}catch(e){}}
@@ -206,7 +213,7 @@ const TYPES={
 const TIERS=[
   {name:'ליאונידס',scale:1.22,dmg:1,speed:1,hp:0,reach:0},
   {name:'ליאונידס הלוחם',cost:500,scale:1.3,dmg:1.35,speed:1.08,hp:30,reach:0,perks:'שריון ברונזה, 35% יותר נזק, עוד 30 חיים, ועכשיו גם קפיצה במקש W או בחץ למעלה, מעל אויבים וחצים'},
-  {name:'ליאונידס האגדי',cost:2000,scale:1.4,dmg:1.8,speed:1.16,hp:50,reach:12,perks:'קסדת זהב, נזק כפול כמעט, עוד 50 חיים, מהיר יותר וחנית ארוכה יותר'}
+  {name:'ליאונידס האגדי',cost:2000,scale:1.4,dmg:1.8,speed:1.16,hp:50,reach:12,perks:'קסדת זהב, נזק כפול כמעט, עוד 50 חיים, מהיר יותר, ועכשיו גם זריקת חנית במקש R שחודרת עד 3 אויבים'}
 ];
 const TAUNTS=['אף עכברוש לא עובר את המעבר.','הדאודורנט שלנו. לא שלהם.','חזור עם המגן שלך, או עליו.','החצים שלהם יסתירו את השמש? אז נילחם בצל.','בוא לקחת אותם.'];
 const SHOP=[
@@ -227,13 +234,13 @@ const stones=[];for(let i=0;i<40;i++)stones.push([rnd(0,W),rnd(GROUND+10,H-6),rn
 const tufts=[];for(let i=0;i<26;i++)tufts.push([rnd(120,W),rnd(GROUND+30,H),rnd(.6,1.2)]);
 
 /* ---------- state ---------- */
-let state='title',G=null,wantKick=false,wantAmit=false,wantJump=false;
+let state='title',G=null,wantKick=false,wantAmit=false,wantJump=false,wantThrow=false,showThrow=store.get('leo_showThrow',false);
 const keys={},touch={left:false,right:false,attack:false,block:false};
 function newGame(){
   G={wave:0,seeds:0,kills:0,time:0,shake:0,overT:0,endT:0,
     tier:0,wheel:null,
-    player:{x:360,z:0,vz:0,hp:100,maxHp:100,dmg:12,cd:0,rate:.38,reach:85,speed:230,facing:1,blocking:false,blockRed:.7,kickCd:0,kickMax:7,hurt:0,atk:0,walk:0,kickAnim:0},
-    granary:{hp:100,max:100},allies:[],enemies:[],arrows:[],catches:[],parts:[],texts:[],
+    player:{x:360,z:0,vz:0,spearT:0,hp:100,maxHp:100,dmg:12,cd:0,rate:.38,reach:85,speed:230,facing:1,blocking:false,blockRed:.7,kickCd:0,kickMax:7,hurt:0,atk:0,walk:0,kickAnim:0},
+    granary:{hp:100,max:100},allies:[],enemies:[],arrows:[],catches:[],spears:[],parts:[],texts:[],
     spawnQ:[],spawnT:0,spawnInt:1.2,waveActive:false,banner:null,up:{spear:0,shield:0,train:0,rage:0,might:0},fury:null};
 }
 function inp(){return{left:keys.ArrowLeft||keys.KeyA||touch.left,right:keys.ArrowRight||keys.KeyD||touch.right,attack:keys.Space||keys.KeyJ||touch.attack,block:keys.ShiftLeft||keys.ShiftRight||keys.KeyS||keys.ArrowDown||keys.KeyK||touch.block}}
@@ -247,7 +254,7 @@ function startWave(){
   for(let i=0;i<mice;i++)q.push('mouse');for(let i=0;i<rats;i++)q.push('rat');for(let i=0;i<fer;i++)q.push('ferret');for(let i=0;i<arc;i++)q.push('archer');for(let i=0;i<fishN;i++)q.push('fish');
   for(let i=q.length-1;i>3;i--){const j=3+Math.floor(Math.random()*(i-2));[q[i],q[j]]=[q[j],q[i]];}
   const boss=n%5===0;if(boss)q.push('boss');
-  G.arrows=[];G.catches=[];G.spawnQ=q;G.spawnInt=Math.max(.42,1.35-n*.07);G.spawnT=1.2;G.waveActive=true;G.endT=0;
+  G.arrows=[];G.catches=[];G.spears=[];G.player.spearT=0;G.spawnQ=q;G.spawnInt=Math.max(.42,1.35-n*.07);G.spawnT=1.2;G.waveActive=true;G.endT=0;
   banner(boss?`גל ${n}: המלך חולדה בא בעצמו`:`גל ${n}`,boss?'הכינו את המגינים!':n===4?'דגי מעמקים! קרא לעמית המז\'רז\'ר (Q)':arc===1?'קשתי עכברושים! הרם מגן מול החצים':pick(TAUNTS));
   sfx('wave');state='play';showOv(null);blur();for(const k in keys)keys[k]=false;
 }
@@ -338,6 +345,30 @@ function updateCatches(dt){
     if(!c.done&&c.t>=AMIT.lift){c.done=true;G.kills++;const rw=c.e.T.reward*CASH;G.seeds+=rw;floatText(c.x,70,'+'+Math.round(rw),'#ffd36b',17,1,true);sfx('coin');}}
   G.catches=G.catches.filter(c=>c.t<AMIT.end);
 }
+/* ---------- זריקת חנית (דרגה 2) ----------
+   R זורק את החנית קדימה. היא חודרת עד THROW.pierce אויבים. אחרי זריקה אין חנית THROW.back שניות:
+   אי אפשר לזרוק, ורווח עושה מכת מגן חלשה. כשהחנית חוזרת יש הבזק זהב */
+const THROW={back:4,pierce:3,speed:720,range:760,dmg:2.5};
+function throwSpear(){
+  const p=G.player;if(G.tier<2||p.spearT>0||G.fury)return;
+  p.spearT=THROW.back;p.atk=.14;sfx('throw');
+  G.spears.push({x:p.x+p.facing*30,f:p.facing,d:0,left:THROW.pierce,hit:[],y0:GROUND+4-p.z-48,stuck:0});
+}
+function updateSpears(dt){
+  const p=G.player;
+  if(p.spearT>0){p.spearT-=dt;if(p.spearT<=0){p.spearT=0;sfx('ready');for(let i=0;i<10;i++)G.parts.push({x:p.x+p.facing*20,y:GROUND-60-p.z,vx:rnd(-90,90),vy:rnd(-90,30),life:.45,max:.45,c:pick(['#fff3b0','#ffd36b']),sz:rnd(2,4),g:0});}}
+  const dmg=p.dmg*Math.pow(1.25,G.up.spear)*THROW.dmg;
+  for(const s of G.spears){
+    if(s.stuck){s.stuck-=dt;continue;}
+    const st=THROW.speed*dt;s.x+=s.f*st;s.d+=st;
+    for(const e of G.enemies)if(s.left>0&&!e.dead&&!s.hit.includes(e)&&Math.abs(e.x-s.x)<e.r+6){s.hit.push(e);s.left--;damage(e,dmg*rnd(.9,1.1),s.f*(e.T.boss?3:14));sfx('hit');}
+    if(s.left<=0||s.d>=THROW.range){s.stuck=.9;}
+    if(s.x<-40||s.x>W+40)s.dead=true;
+  }
+  G.spears=G.spears.filter(s=>!s.dead&&(s.stuck===0||s.stuck>0));
+}
+// גובה החנית במעוף: קשת קטנה, ובסוף נוחתת בקרקע
+const spearY=s=>{const k=Math.min(1,s.d/THROW.range);return s.stuck?GROUND-4:s.y0+(GROUND-26-s.y0)*k-Math.sin(k*Math.PI)*34;};
 const catchLift=c=>c.t<AMIT.bite?0:Math.pow(Math.min(1,(c.t-AMIT.bite)/(AMIT.lift-AMIT.bite)),2)*640;
 function gameOver(reason){
   if(state==='over')return;state='over';G.fury=null;G.overT=1.3;sfx('die');
@@ -441,13 +472,16 @@ function update(dt){
   if(p.z<=0&&front&&p.x>front.x-front.r-14)p.x=front.x-front.r-14;
   p.x=Math.max(110,Math.min(W-40,p.x));
   if(I.attack&&!p.blocking&&p.cd<=0){
-    p.cd=p.rate*Math.pow(.88,G.up.train);p.atk=.14;sfx('stab');
-    const dmg=p.dmg*Math.pow(1.25,G.up.spear);let hit=false;
-    for(const e of G.enemies){const dx=(e.x-p.x)*p.facing;if(dx>-10&&dx<p.reach+e.r){damage(e,dmg*rnd(.85,1.15),p.facing*(e.T.boss?2:9));hit=true;}}
+    const bare=p.spearT>0; // בלי חנית: מכת מגן, חצי נזק וטווח קצר
+    p.cd=p.rate*Math.pow(.88,G.up.train);p.atk=.14;sfx(bare?'block':'stab');
+    const dmg=p.dmg*Math.pow(1.25,G.up.spear)*(bare?.5:1),reach=bare?55:p.reach;let hit=false;
+    for(const e of G.enemies){const dx=(e.x-p.x)*p.facing;if(dx>-10&&dx<reach+e.r){damage(e,dmg*rnd(.85,1.15),p.facing*(e.T.boss?2:9));hit=true;}}
     if(hit)sfx('hit');
   }
   if(wantKick){wantKick=false;if(p.kickCd<=0&&!G.fury)doKick();}
   if(wantAmit){wantAmit=false;callAmit();}
+  if(wantThrow){wantThrow=false;throwSpear();}
+  updateSpears(dt);
   G.enemies.sort((a,b)=>a.x-b.x);
   for(const a of G.allies){
     a.cd=Math.max(0,a.cd-dt);a.atk=Math.max(0,a.atk-dt);a.hurt=Math.max(0,a.hurt-dt);
@@ -544,8 +578,8 @@ function drawHamster(x,y,s,f,o){
     ctx.beginPath();ctx.moveTo(1,-24);ctx.quadraticCurveTo(7,-20,13,-24);ctx.moveTo(7,-22);ctx.lineTo(7,-8);ctx.stroke();}
   const sy=o.block?-48:-38;
   ctx.strokeStyle='#6b4423';ctx.lineWidth=3.2;ctx.lineCap='round';
-  ctx.beginPath();ctx.moveTo(-22+thrust,sy+8);ctx.lineTo(48+thrust,sy-4);ctx.stroke();
-  ctx.fillStyle='#e8bb66';ctx.beginPath();ctx.moveTo(59+thrust,sy-5.8);ctx.lineTo(48.7+thrust,sy-.1);ctx.lineTo(47.3+thrust,sy-7.9);ctx.closePath();ctx.fill();
+  if(!o.noSpear){ctx.beginPath();ctx.moveTo(-22+thrust,sy+8);ctx.lineTo(48+thrust,sy-4);ctx.stroke();
+  ctx.fillStyle='#e8bb66';ctx.beginPath();ctx.moveTo(59+thrust,sy-5.8);ctx.lineTo(48.7+thrust,sy-.1);ctx.lineTo(47.3+thrust,sy-7.9);ctx.closePath();ctx.fill();}
   ell(2,-56,6,6,furD);ell(2,-56,3,3,'#f0b3a6');
   ell(13,-42,15,15,fur);ell(21,-35,9,7.5,belly);ell(27.5,-41,2.6,2.6,'#e77b8a');
   ctx.strokeStyle='#5a3a2a88';ctx.lineWidth=.8;ctx.beginPath();ctx.moveTo(25,-38);ctx.lineTo(36,-40);ctx.moveTo(25,-37);ctx.lineTo(35,-33);ctx.stroke();
@@ -739,6 +773,13 @@ function drawArrows(){
     ctx.fillStyle='#ccc';ctx.beginPath();ctx.moveTo(6,0);ctx.lineTo(0,-3);ctx.lineTo(0,3);ctx.closePath();ctx.fill();
     ctx.fillStyle='#b8281f';ctx.fillRect(-22,-3,6,2);ctx.fillRect(-22,1,6,2);ctx.restore();}
 }
+function drawSpears(){
+  for(const s of G.spears){const y=spearY(s);ctx.save();ctx.translate(s.x,y);if(s.stuck){ctx.globalAlpha=Math.min(1,s.stuck*2);ctx.rotate(s.f*.5);}ctx.scale(s.f,1);
+    ctx.strokeStyle='#6b4423';ctx.lineWidth=3.5;ctx.lineCap='round';ctx.beginPath();ctx.moveTo(-60,0);ctx.lineTo(10,0);ctx.stroke();
+    ctx.fillStyle='#ffd36b';ctx.shadowColor='#ffd36b';ctx.shadowBlur=s.stuck?0:10;ctx.beginPath();ctx.moveTo(24,0);ctx.lineTo(10,-5);ctx.lineTo(10,5);ctx.closePath();ctx.fill();ctx.shadowBlur=0;
+    if(!s.stuck){ctx.strokeStyle='#fff3b055';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(-60,0);ctx.lineTo(-110,0);ctx.stroke();}
+    ctx.restore();}
+}
 function drawParts(){for(const p of G.parts){ctx.globalAlpha=Math.max(0,p.life/p.max);ell(p.x,p.y,p.sz,p.sz,p.c);}ctx.globalAlpha=1;}
 function drawTexts(){for(const t of G.texts){ctx.globalAlpha=Math.min(1,t.life/t.max*2);const f=`900 ${t.sz}px Heebo,sans-serif`;
   if(t.icon){ctx.font=f;const w=ctx.measureText(t.t).width;txt(t.t,t.x-t.sz*.55,t.y,f,t.c,4);fishIcon(t.x+w/2+t.sz*.25,t.y-t.sz*.32,t.sz/20);}else txt(t.t,t.x,t.y,f,t.c,4);}ctx.globalAlpha=1;}
@@ -766,8 +807,8 @@ function draw(){
   const p=G.player;
   if(F&&F.t>FURY.grow&&F.t<FURY.back){const g=Math.min(1,(F.t-FURY.grow)/.18),s=1.05*(g<1?g*(1.25-.25*g):1);
     drawSpartan(p.x,GROUND+4,s,F.f,F.t>FURY.impact-.08&&F.t<FURY.impact+.45,F.t);}
-  else if(state!=='wheel')drawHamster(p.x,GROUND+4-p.z,TIERS[G.tier].scale,p.facing,{atk:p.atk,hurt:p.hurt,block:p.blocking&&state==='play',walk:p.walk,kick:p.kickAnim,leader:true,dead:p.hp<=0,tier:G.tier,z:p.z});
-  drawArrows();drawParts();if(F)drawFuryFront();drawTexts();drawFG();
+  else if(state!=='wheel')drawHamster(p.x,GROUND+4-p.z,TIERS[G.tier].scale,p.facing,{atk:p.atk,hurt:p.hurt,block:p.blocking&&state==='play',walk:p.walk,kick:p.kickAnim,leader:true,dead:p.hp<=0,tier:G.tier,z:p.z,noSpear:p.spearT>0});
+  drawArrows();drawSpears();drawParts();if(F)drawFuryFront();drawTexts();drawFG();
   ctx.restore();
   drawBossBar();if(G.banner&&!F)drawBanner();if(F)drawFuryOverlay();
   if(G.wheel)drawWheel();
@@ -802,6 +843,8 @@ function updateHud(){
   $('hpFill').style.width=(p.hp/p.maxHp*100)+'%';setT('hpTxt',Math.ceil(p.hp)+'/'+p.maxHp);
   $('grFill').style.width=(G.granary.hp/G.granary.max*100)+'%';setT('grTxt',Math.ceil(G.granary.hp));
   setT('seeds',Math.floor(G.seeds));setT('wave',G.wave);setT('kills',G.kills);
+  const sh=G.tier>=2;$('throwTouch').hidden=!sh;$('throwChip').hidden=!(sh&&showThrow);
+  if(sh&&showThrow){const r=p.spearT/THROW.back;$('throwBar').style.transform=`scaleX(${r})`;setT('throwTxt',r>0?`חנית ${Math.ceil(p.spearT)}`:'חנית (R)');}
   $('amitBtn').classList.toggle('off',!amitTarget()||G.granary.hp<=AMIT.cost);
   const k=p.kickCd/p.kickMax;$('kickBar').style.transform=`scaleX(${1-k})`;setT('kickTxt',k>0?`בעיטה בעוד ${Math.ceil(p.kickCd)}`:'זאת ספרטה! (E)');
 }
@@ -823,6 +866,7 @@ addEventListener('keydown',e=>{
   if(state==='play'&&(e.code==='KeyE'||e.code==='KeyL')&&!e.repeat)wantKick=true;
   if(state==='play'&&e.code==='KeyQ'&&!e.repeat)wantAmit=true;
   if(state==='play'&&(e.code==='KeyW'||e.code==='ArrowUp')&&!e.repeat)wantJump=true;
+  if(state==='play'&&e.code==='KeyR'&&!e.repeat)wantThrow=true;
   if(e.code==='KeyP'||e.code==='Escape')togglePause();
   const onBtn=document.activeElement&&document.activeElement.tagName==='BUTTON';
   if(e.code==='Enter'&&!e.repeat&&!onBtn){if(state==='title'||state==='over')startGame();else if(state==='shop')startWave();}
@@ -832,8 +876,9 @@ addEventListener('blur',()=>{for(const k in keys)keys[k]=false;if(state==='play'
 document.addEventListener('visibilitychange',()=>{if(document.hidden&&state==='play')togglePause();});
 for(const b of document.querySelectorAll('#touch button')){
   const k=b.dataset.k;
-  const on=e=>{e.preventDefault();if(k==='kick'||k==='amit'||k==='jump'){if(state==='play'){if(k==='kick')wantKick=true;else if(k==='jump')wantJump=true;else wantAmit=true;}}else touch[k]=true;};
-  const off=()=>{if(k!=='kick'&&k!=='amit'&&k!=='jump')touch[k]=false;};
+  const tap={kick:()=>wantKick=true,jump:()=>wantJump=true,amit:()=>wantAmit=true,throw:()=>wantThrow=true};
+  const on=e=>{e.preventDefault();if(tap[k]){if(state==='play')tap[k]();}else touch[k]=true;};
+  const off=()=>{if(!tap[k])touch[k]=false;};
   b.addEventListener('pointerdown',on);b.addEventListener('pointerup',off);b.addEventListener('pointerleave',off);b.addEventListener('pointercancel',off);
 }
 if(window.matchMedia&&matchMedia('(pointer:coarse)').matches)$('touch').classList.add('on');
@@ -841,6 +886,7 @@ $('startBtn').addEventListener('click',startGame);
 $('againBtn').addEventListener('click',startGame);
 $('nextBtn').addEventListener('click',startWave);
 $('resumeBtn').addEventListener('click',togglePause);
+$('optThrow').checked=showThrow;$('optThrow').addEventListener('change',e=>{showThrow=e.target.checked;store.set('leo_showThrow',showThrow);});
 $('amitBtn').addEventListener('click',()=>{if(state==='play')wantAmit=true;blur();});
 $('pauseBtn').addEventListener('click',()=>{togglePause();});
 $('shopGrid').addEventListener('click',e=>{const b=e.target.closest('button[data-id]');if(b&&!b.disabled)buy(b.dataset.id,b.dataset.n);});
