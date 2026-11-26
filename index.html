@@ -47,6 +47,7 @@ h2{font-size:clamp(20px,3vw,30px);color:var(--bronze);margin-top:4px}
 .keys div{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
 kbd{font:700 12px Heebo,sans-serif;background:#f6e7c8;color:#2a1411;border-radius:5px;padding:2px 6px;box-shadow:0 2px 0 #9b7a4a;white-space:nowrap}
 .btn{font:700 clamp(17px,2.4vw,22px) Heebo,sans-serif;background:linear-gradient(#d33a2c,#8f1d16);color:#fff;border:2px solid var(--seed);border-radius:99px;padding:.45em 1.6em;cursor:pointer;min-height:44px;box-shadow:0 4px 0 #5c120d}
+.btn.alt{background:linear-gradient(#5a4a3a,#3a2e24);box-shadow:0 4px 0 #1e1712;margin-inline-start:.5em}
 .btn:active{transform:translateY(2px);box-shadow:0 2px 0 #5c120d}
 .muted{opacity:.7;font-size:14px;margin-top:10px}
 .shopgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin:12px 0}
@@ -117,14 +118,14 @@ kbd{font:700 12px Heebo,sans-serif;background:#f6e7c8;color:#2a1411;border-radiu
 <div id="ovPause" class="overlay"><div class="panel">
   <h2>הפוגה בקרב</h2>
   <p class="tag">העכברושים מחכים. גם הם צריכים לנשום.</p>
-  <button class="btn" id="resumeBtn">חזרה לקרב</button>
+  <button class="btn" id="resumeBtn">חזרה לקרב</button><button class="btn alt" id="pTitleBtn">למסך הפתיחה</button>
 </div></div>
 
 <div id="ovOver" class="overlay"><div class="panel">
   <h1 id="overTitle">ליאונידס נפל</h1>
   <p class="tag" id="overMsg"></p>
   <div class="stats3"><div>הגעת לגל<b id="oWave">0</b></div><div>יריבים שהובסו<b id="oKills">0</b></div><div>השיא שלך<b id="oBest">0</b></div></div>
-  <button class="btn" id="againBtn">שוב לקרב</button>
+  <button class="btn" id="againBtn">שוב לקרב</button><button class="btn alt" id="oTitleBtn">למסך הפתיחה</button>
 </div></div>
 </div></div>
 
@@ -190,7 +191,7 @@ const TYPES={
 };
 const TAUNTS=['אף עכברוש לא עובר את המעבר.','הדאודורנט שלנו. לא שלהם.','חזור עם המגן שלך, או עליו.','החצים שלהם יסתירו את השמש? אז נילחם בצל.','בוא לקחת אותם.'];
 const SHOP=[
-  {id:'spear',name:'חנית מושחזת',desc:'נזק גבוה ב-25% לך ולהופליטים',cost:l=>20+l*18,max:8},
+  {id:'spear',name:'חנית מושחזת',desc:'נזק גבוה ב-25% לך וב-15% להופליטים',cost:l=>20+l*18,max:8},
   {id:'shield',name:'מגן ברונזה',desc:'עוד 20 חיים מקסימליים, חסימה חזקה יותר והופליטים עמידים יותר',cost:l=>18+l*16,max:6},
   {id:'train',name:'אימון אגוגה',desc:'דקירות מהירות יותר ב-12%',cost:l=>22+l*20,max:6},
   {id:'hoplite',name:'גיוס הופליט',desc:'אוגר ספרטני שעומד בקו ודוקר כל מי שמתקרב',cost:l=>30+l*22,max:6},
@@ -228,7 +229,7 @@ function startWave(){
   const boss=n%5===0;if(boss)q.push('boss');
   G.arrows=[];G.spawnQ=q;G.spawnInt=Math.max(.42,1.35-n*.07);G.spawnT=1.2;G.waveActive=true;G.endT=0;
   banner(boss?`גל ${n}: המלך חולדה בא בעצמו`:`גל ${n}`,boss?'הכינו את המגינים!':arc===1?'קשתי עכברושים! הרם מגן מול החצים':pick(TAUNTS));
-  sfx('wave');state='play';showOv(null);blur();
+  sfx('wave');state='play';showOv(null);blur();for(const k in keys)keys[k]=false;
 }
 function spawn(type){
   const T=TYPES[type],sc=1+(G.wave-1)*.09,hp=Math.round(T.hp*sc*(T.boss?G.wave/5:1));
@@ -655,7 +656,7 @@ function loop(t){
 /* ---------- input ---------- */
 addEventListener('keydown',e=>{
   if(state==='play'&&['Space','ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.code))e.preventDefault();
-  keys[e.code]=true;
+  if(!e.repeat)keys[e.code]=true;
   if(state==='play'&&(e.code==='KeyE'||e.code==='KeyL')&&!e.repeat)wantKick=true;
   if(e.code==='KeyP'||e.code==='Escape')togglePause();
   const onBtn=document.activeElement&&document.activeElement.tagName==='BUTTON';
@@ -680,7 +681,11 @@ $('shopGrid').addEventListener('click',e=>{const b=e.target.closest('button[data
 function setMute(){$('muteBtn').textContent=muted?'🔇':'🔊';}
 $('muteBtn').addEventListener('click',()=>{muted=!muted;store.set('leo_muted',muted);setMute();blur();});
 setMute();
-const best=store.get('leo_best',0);$('bestTxt').textContent=best?`השיא שלך: גל ${best}`:'כמה גלים תחזיק?';
+function showBest(){const best=store.get('leo_best',0);$('bestTxt').textContent=best?`השיא שלך: גל ${best}`:'כמה גלים תחזיק?';}
+function goTitle(){newGame();state='title';showOv('ovTitle');showBest();blur();}
+$('pTitleBtn').addEventListener('click',goTitle);
+$('oTitleBtn').addEventListener('click',goTitle);
+showBest();
 
 newGame();resize();requestAnimationFrame(loop);
 }
