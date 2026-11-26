@@ -211,7 +211,13 @@ const TYPES={
   archer:{hp:30,speed:60,dmg:7,rate:2.2,reward:8,size:.9,fur:'#8f8278',tunic:'#7a2f86',ranged:true,range:250},
   ferret:{hp:120,speed:36,dmg:14,rate:1.2,reward:14,size:1.2,fur:'#dcc8a0',tunic:'#3f1f66',long:true},
   fish:{hp:230,speed:30,dmg:15,rate:1.4,reward:24,size:1.25,fur:'#2e3d52',angler:true,fixed:true}, // דג מעמקים: נזק קבוע 15, לא גדל עם הגלים
-  boss:{hp:650,speed:26,dmg:24,rate:1.4,reward:120,size:2.1,fur:'#5d4c40',tunic:'#4b1d7a',red:true,boss:true}
+  boss:{hp:650,speed:26,dmg:24,rate:1.4,reward:120,size:2.1,fur:'#5d4c40',tunic:'#4b1d7a',red:true,boss:true,name:'המלך חולדה',bar:'#b44cff',
+    arrive:['המלך חולדה הגיע!','הפל אותו והגל ייגמר בכבוד'],fall:['המלך חולדה הובס!','הכתר מתגלגל בעפר, והאנטי ז\'לל התמלא']},
+  // הקראקן (גל 15) והגור שלו (גל 10): noMul = בלי מכפיל הבוס לפי גל. לקראקן יש מתקפת זרוע מהאדמה (G.slams)
+  cub:{hp:600,speed:32,dmg:14,rate:1.2,reward:90,size:1.2,fur:'#c25a92',boss:true,kraken:true,cub:true,noMul:true,name:'גור הקראקן',bar:'#e58ab8',
+    arrive:['גור הקראקן זוחל מהים!','הוא קטן, אבל הוא נושך'],fall:['גור הקראקן נמלט אל הים!','בעוד 5 גלים יגיע הקראקן האמיתי']},
+  kraken:{hp:2600,speed:20,dmg:22,rate:1.7,reward:300,size:2.4,fur:'#8a2e63',boss:true,kraken:true,noMul:true,name:'הקראקן',bar:'#e0508f',
+    fall:['הקראקן הובס!','הוא שוקע חזרה אל המעמקים, והאנטי ז\'לל התמלא']}
 };
 // הדרגות של ליאונידס. קונים אותן בגלגל האוגר בחנות. hp: תוספת למקסימום, dmg ו-speed: מכפילים
 const TIERS=[
@@ -246,7 +252,7 @@ let state='title',G=null,wantKick=false,wantAmit=false,wantJump=false,wantThrow=
 const keys={},touch={left:false,right:false,attack:false,block:false};
 function newGame(){
   G={wave:0,seeds:0,kills:0,time:0,shake:0,overT:0,endT:0,
-    tier:0,wheel:null,
+    tier:0,wheel:null,amitCd:0,intro:null,cameo:null,cameoAt:0,slams:[],
     player:{x:360,z:0,vz:0,spearT:0,hp:100,maxHp:100,dmg:12,cd:0,rate:.38,reach:85,speed:230,facing:1,blocking:false,blockRed:.7,kickCd:0,kickMax:7,hurt:0,atk:0,walk:0,kickAnim:0},
     granary:{hp:100,max:100},allies:[],enemies:[],arrows:[],catches:[],spears:[],parts:[],texts:[],
     spawnQ:[],spawnT:0,spawnInt:1.2,waveActive:false,banner:null,up:{spear:0,shield:0,train:0,rage:0,might:0},fury:null};
@@ -262,16 +268,20 @@ function startWave(){
   const mice=Math.min(4+n*2,26),rats=Math.max(0,Math.min(n*2-2,22)),fer=Math.max(0,Math.min(n-3,12)),arc=Math.max(0,Math.min(n-1,10)),fishN=n<4?0:Math.min(3,1+Math.floor((n-4)/3));
   for(let i=0;i<mice;i++)q.push('mouse');for(let i=0;i<rats;i++)q.push('rat');for(let i=0;i<fer;i++)q.push('ferret');for(let i=0;i<arc;i++)q.push('archer');for(let i=0;i<fishN;i++)q.push('fish');
   for(let i=q.length-1;i>3;i--){const j=3+Math.floor(Math.random()*(i-2));[q[i],q[j]]=[q[j],q[i]];}
-  const boss=n%5===0;if(boss)q.push('boss');
+  // בוסים: 5 המלך חולדה, 10 גור הקראקן, 15 הקראקן, ואחר כך כל 10 גלים לסירוגין (20 המלך, 30 הקראקן...)
+  const bt=n===5?'boss':n===10?'cub':n===15?'kraken':n>15&&n%10===0?((n/10)%2?'kraken':'boss'):null;
+  if(bt==='kraken')q.length=Math.ceil(q.length*.6);else if(bt)q.push(bt);
   G.arrows=[];G.catches=[];G.spears=[];G.player.spearT=0;G.spawnQ=q;G.spawnInt=Math.max(.42,1.35-n*.07);G.spawnT=1.2;G.waveActive=true;G.endT=0;
-  banner(boss?`גל ${n}: המלך חולדה בא בעצמו`:`גל ${n}`,boss?'הכינו את המגינים!':n===4?'דגי מעמקים! קרא לעמית המז\'רז\'ר (Q)':arc===1?'קשתי עכברושים! הרם מגן מול החצים':pick(TAUNTS));
+  banner(bt==='boss'?`גל ${n}: המלך חולדה בא בעצמו`:bt==='cub'?`גל ${n}: משהו זוחל מהים`:`גל ${n}`,bt==='boss'?'הכינו את המגינים!':bt==='cub'?'תראו לו שהמעבר סגור':n===4?'דגי מעמקים! קרא לעמית המז\'רז\'ר (Q)':arc===1?'קשתי עכברושים! הרם מגן מול החצים':pick(TAUNTS));
+  G.slams=[];G.amitCd=0;G.intro=null;G.cameo=null;G.cameoAt=n>=6&&n<15&&n!==10&&(n%3===0||Math.random()<.4)?rnd(4,14):0;
+  if(bt==='kraken'){G.banner=null;G.intro={t:0};thunder();horn(.6);}
   sfx('wave');state='play';showOv(null);blur();for(const k in keys)keys[k]=false;
 }
 function spawn(type){
-  const T=TYPES[type],w=Math.min(G.wave,GROW.cap),grow=Math.pow(GROW.extra,w-1),sc=(1+(w-1)*.09)*grow,hp=Math.round(T.hp*sc*(T.boss?w/5:1));
+  const T=TYPES[type],w=Math.min(G.wave,GROW.cap),grow=Math.pow(GROW.extra,w-1),sc=(1+(w-1)*.09)*grow,hp=Math.round(T.hp*sc*(T.boss&&!T.noMul?w/5:1));
   const mul=(T.fixed?1:1+(w-1)*.05)*grow; // מכפיל הנזק של האויב הזה
   G.enemies.push({T,x:W+40+rnd(0,30),hp,max:hp,r:22*T.size,cd:rnd(0,.5),stun:0,flash:0,lunge:0,walk:rnd(0,6),mul,yo:T.boss?0:T.ranged?rnd(-14,-8):rnd(-5,5)});
-  if(T.boss){banner('המלך חולדה הגיע!','הפל אותו והגל ייגמר בכבוד',2.5);G.shake=12;}
+  if(T.arrive){banner(T.arrive[0],T.arrive[1],2.5);G.shake=12;}
 }
 function makeAlly(){const hp=60+G.up.shield*12;return{x:300,yo:0,hp,max:hp,dmg:6,rate:.9,reach:80,cd:rnd(0,.5),atk:0,hurt:0};}
 function layoutAllies(){G.allies.forEach((a,i)=>{a.x=i<3?300:272;a.yo=i<3?[-8,0,8][i]:[-12,-4,4][i-3];});}
@@ -281,7 +291,7 @@ function damage(e,d,kb){
   d=Math.max(1,Math.round(d));e.hp-=d;e.flash=.1;e.x+=kb;
   floatText(e.x,GROUND-e.r*2.2-10,d,'#fff',16,.7);puff(e.x,GROUND-e.r,3,e.T.fur);
   if(e.hp<=0&&!e.dead){e.dead=true;G.kills++;const rw=e.T.reward*CASH;G.seeds+=rw;floatText(e.x,GROUND-e.r*2.2-32,'+'+Math.round(rw),'#ffd36b',17,1,true);sfx('coin');puff(e.x,GROUND-e.r,12,e.T.fur);
-    if(e.T.boss){G.shake=18;banner('המלך חולדה הובס!','הכתר מתגלגל בעפר, והאנטי ז\'לל התמלא',2.2);G.granary.hp=G.granary.max;floatText(62,GROUND-178,'מלא!','#7fe0d0',18,1.6);}}
+    if(e.T.boss){G.shake=18;banner(e.T.fall[0],e.T.fall[1],2.6);G.granary.hp=G.granary.max;floatText(62,GROUND-178,'מלא!','#7fe0d0',18,1.6);}}
 }
 function hitBlocker(b,d,e){
   d=Math.round(d);
@@ -339,17 +349,29 @@ const furyScale=()=>G.fury&&G.fury.t<FURY.impact?.12:1;
 /* ---------- העמית המז'רז'ר ----------
    יד ענקית יורדת מהשמיים עם חכה ופתיון ז'ירז'ור, תופסת את דג המעמקים הקרוב לדאודורנט ומעלה אותו לשמיים.
    עולה AMIT.cost ג'ל. ציר זמן: down הפתיון מגיע לפה, bite נתפס, lift הדג נעלם (נחשב הריגה), end היד עולה */
-const AMIT={cost:10,down:.45,bite:.75,lift:2,end:2.4};
-const amitTarget=()=>{let t=null;for(const e of G.enemies)if(e.T.angler&&!e.dead&&e.x<W-10&&(!t||e.x<t.x))t=e;return t;};
+// מול הקראקן: עמית לא מצליח לדוג אותו. החוט נקרע ב-snap והקראקן מאבד bossCut מהחיים. כל עוד הקראקן חי יש krakenCd שניות בין קריאות
+const AMIT={cost:10,down:.45,bite:.75,lift:2,end:2.4,snap:1.7,bossCut:.05,krakenCd:5};
+const bigKraken=()=>G.enemies.find(e=>e.T.kraken&&!e.T.cub&&!e.dead);
+const amitTarget=()=>{let t=null;for(const e of G.enemies)if(e.T.angler&&!e.dead&&e.x<W-10&&(!t||e.x<t.x))t=e;
+  if(!t){const k=bigKraken();if(k&&k.x<W-10&&!G.catches.some(c=>c.e===k))t=k;}return t;};
 function callAmit(){
   const gr=G.granary,tgt=amitTarget();
+  if(G.amitCd>0){floatText(G.player.x,GROUND-120,`עמית נח עוד ${Math.ceil(G.amitCd)} שניות`,'#9fd8ff',15,1);return;}
   if(!tgt){floatText(G.player.x,GROUND-120,'אין דגים לדוג','#9fd8ff',15,1);return;}
   if(gr.hp<=AMIT.cost){floatText(62,GROUND-178,'אין מספיק ג\'ל לעמית','#ff9a8a',15,1.2);return;}
   gr.hp-=AMIT.cost;floatText(62,GROUND-178,'-'+AMIT.cost,'#7fe0d0',16,.9);
+  if(bigKraken())G.amitCd=AMIT.krakenCd;
+  if(tgt.T.kraken){tgt.stun=AMIT.snap+.2;G.catches.push({e:tgt,t:0,x:tgt.x,pull:true});sfx('cast');return;}
   G.enemies=G.enemies.filter(e=>e!==tgt);tgt.stun=0;tgt.flash=0;G.catches.push({e:tgt,t:0,x:tgt.x});sfx('cast');
 }
 function updateCatches(dt){
   for(const c of G.catches){c.t+=dt;
+    if(c.pull){const e=c.e;
+      if(!c.bit&&c.t>=AMIT.down){c.bit=true;sfx('splash');floatText(e.x,GROUND-e.r*4.6,'הקראקן נאבק!','#ffd36b',18,1);}
+      if(!c.reel&&c.t>=AMIT.bite){c.reel=true;sfx('reel');}
+      if(c.t>=AMIT.bite&&c.t<AMIT.snap)e.lift=Math.min(1,(c.t-AMIT.bite)/(AMIT.snap-AMIT.bite))*70+Math.sin(G.time*30)*4;
+      if(!c.snapped&&c.t>=AMIT.snap){c.snapped=true;e.lift=0;G.shake=16;boom();dust(e.x,GROUND,20,'#d8b98a');floatText(e.x,GROUND-e.r*4.6,'החוט נקרע!','#ffd36b',20,1.4);if(!e.dead)damage(e,e.max*AMIT.bossCut,0);}
+      continue;}
     if(!c.bit&&c.t>=AMIT.down){c.bit=true;sfx('splash');puff(c.x-30*c.e.T.size,GROUND-80*c.e.T.size,10,'#bfe9ff');floatText(c.x,GROUND-150,'נתפס!','#ffd36b',18,1);}
     if(!c.reel&&c.t>=AMIT.bite){c.reel=true;sfx('reel');}
     if(!c.done&&c.t>=AMIT.lift){c.done=true;G.kills++;const rw=c.e.T.reward*CASH;G.seeds+=rw;floatText(c.x,70,'+'+Math.round(rw),'#ffd36b',17,1,true);sfx('coin');}}
@@ -380,6 +402,25 @@ function updateSpears(dt){
 // גובה החנית במעוף: קשת קטנה, ובסוף נוחתת בקרקע
 const spearY=s=>{const k=Math.min(1,s.d/THROW.range);return s.stuck?GROUND-4:s.y0+(GROUND-26-s.y0)*k-Math.sin(k*Math.PI)*34;};
 const catchLift=c=>c.t<AMIT.bite?0:Math.pow(Math.min(1,(c.t-AMIT.bite)/(AMIT.lift-AMIT.bite)),2)*640;
+/* ---------- הקראקן: הופעה ברקע, ערפל בכניסה, וזרועות מהאדמה ----------
+   cameo: בחלק מהגלים 6-14 הוא מציץ מהים ברקע. intro (גל 15): ערפל וכותרת, ב-INTRO.spawn הוא מופיע בשדה */
+const INTRO={spawn:2.6,end:4.4},CAMEO=7;
+function updateKrakenStuff(dt){
+  if(G.intro){const I=G.intro;I.t+=dt;if(!I.spawned&&I.t>=INTRO.spawn){I.spawned=true;spawn('kraken');G.enemies[G.enemies.length-1].x=W-150;G.shake=16;boom();}if(I.t>=INTRO.end)G.intro=null;}
+  if(G.cameoAt>0){G.cameoAt-=dt;if(G.cameoAt<=0){G.cameoAt=0;G.cameo={t:0,x:rnd(700,880)};}}
+  if(G.cameo){G.cameo.t+=dt;if(G.cameo.t>=CAMEO)G.cameo=null;}
+}
+const cameoRise=()=>{const t=G.cameo.t;return t<1.5?t/1.5:t<5.5?1:Math.max(0,1-(t-5.5)/1.5);};
+function updateSlams(dt){
+  const p=G.player;
+  for(const s of G.slams){s.t+=dt;
+    if(s.t<.9&&Math.random()<dt*20)G.parts.push({x:s.x+rnd(-18,18),y:GROUND,vx:rnd(-30,30),vy:rnd(-120,-60),life:.4,max:.4,c:'#8a6238',sz:rnd(2,4),g:500});
+    if(!s.hit&&s.t>=.9){s.hit=true;G.shake=Math.max(G.shake,10);dust(s.x,GROUND,14,'#8a6238');sfx('hit');
+      if(p.hp>0&&Math.abs(p.x-s.x)<42)hitBlocker({kind:'player',x:p.x},s.dmg,{x:p.x-p.facing*10});
+      for(const a of G.allies)if(Math.abs(a.x-s.x)<42)hitBlocker({kind:'ally',ref:a},s.dmg,{x:s.x});
+      if(state!=='play')return;}}
+  G.slams=G.slams.filter(s=>s.t<1.6);
+}
 function gameOver(reason){
   if(state==='over')return;state='over';G.fury=null;G.overT=1.3;sfx('die');
   const best=dev?store.get('leo_best',0):Math.max(store.get('leo_best',0),G.wave);if(!dev)store.set('leo_best',best);
@@ -468,7 +509,8 @@ function updateFx(dt){
 function update(dt){
   updateFx(dt);
   const p=G.player,I=G.fury?{}:inp();
-  if(G.waveActive&&G.spawnQ.length){G.spawnT-=dt;if(G.spawnT<=0){spawn(G.spawnQ.shift());G.spawnT=G.spawnInt*rnd(.6,1.4);}}
+  G.amitCd=Math.max(0,G.amitCd-dt);updateKrakenStuff(dt);
+  if(G.waveActive&&G.spawnQ.length&&!G.intro){G.spawnT-=dt;if(G.spawnT<=0){spawn(G.spawnQ.shift());G.spawnT=G.spawnInt*rnd(.6,1.4);}}
   p.cd=Math.max(0,p.cd-dt);p.kickCd=Math.max(0,p.kickCd-dt);p.hurt=Math.max(0,p.hurt-dt);p.atk=Math.max(0,p.atk-dt);p.kickAnim=Math.max(0,p.kickAnim-dt);
   p.blocking=!!I.block;
   const mv=(I.right?1:0)-(I.left?1:0);
@@ -508,6 +550,7 @@ function update(dt){
     const e=G.enemies[i];
     e.flash=Math.max(0,e.flash-dt);e.lunge=Math.max(0,e.lunge-dt);e.cd=Math.max(0,e.cd-dt);
     if(e.stun>0){e.stun-=dt;continue;}
+    if(e.T.kraken&&!e.T.cub){e.slamT=(e.slamT??3)-dt;if(e.slamT<=0){e.slamT=rnd(4.5,6.5);const tx=p.hp>0?p.x:G.allies.length?G.allies[0].x:200;G.slams.push({x:tx+rnd(-15,15),t:0,dmg:16*e.mul});sfx('splash');}}
     let tb=null;for(const b of blockers)if(b.x<e.x&&(!tb||b.x>tb.x))tb=b;
     if(!tb)tb=blockers[0];
     const R=e.T.ranged;
@@ -520,8 +563,9 @@ function update(dt){
     else if(e.x<=limit&&!byFriend&&e.cd<=0){e.cd=e.T.rate;e.lunge=.2;hitBlocker(tb,e.T.dmg*e.mul,e);if(state!=='play')return;}
   }
   updateArrows(dt,blockers);if(state!=='play')return;
+  updateSlams(dt);if(state!=='play')return;
   updateCatches(dt);
-  if(G.waveActive&&!G.spawnQ.length&&!G.enemies.length&&!G.catches.length){
+  if(G.waveActive&&!G.spawnQ.length&&!G.enemies.length&&!G.catches.length&&!G.intro){
     G.waveActive=false;const bonus=Math.round((10+G.wave*3)*CASH);G.seeds+=bonus;banner(`גל ${G.wave} נהדף!`,`בונוס: ${bonus} ז'ירז'ורים`,1.8);G.endT=1.9;
   }
   if(!G.waveActive&&G.endT>0){G.endT-=dt;if(G.endT<=0)openShop();}
@@ -539,6 +583,7 @@ function drawBG(){
   g=ctx.createLinearGradient(0,350,0,405);g.addColorStop(0,'#e98a5a');g.addColorStop(.18,'#3d6b80');g.addColorStop(1,'#1f3f52');ctx.fillStyle=g;ctx.fillRect(0,350,W,52);
   ctx.strokeStyle='#ffd9a066';ctx.lineWidth=2;
   for(let i=0;i<9;i++){const y=357+i*5,w=60-i*5,x=660+Math.sin(G.time*1.5+i)*8;ctx.beginPath();ctx.moveTo(x-w,y);ctx.lineTo(x+w,y);ctx.stroke();}
+  if(G.intro&&G.intro.t<INTRO.spawn)drawSeaKraken(790,Math.min(1,G.intro.t/2),1.5);if(G.cameo)drawSeaKraken(G.cameo.x,cameoRise(),.8);
   poly(nearM,'#3c2230',402);
   ctx.strokeStyle='#ffffff10';ctx.lineWidth=3;for(let i=0;i<5;i++){ctx.beginPath();ctx.moveTo(30+i*60,200+i*30);ctx.lineTo(120+i*70,230+i*32);ctx.stroke();}
   g=ctx.createLinearGradient(0,398,0,H);g.addColorStop(0,'#a77b49');g.addColorStop(.3,'#8a6238');g.addColorStop(1,'#4d331d');ctx.fillStyle=g;ctx.fillRect(0,398,W,H-398);
@@ -756,13 +801,15 @@ function drawAngler(e,lift=0){
 }
 /* היד של העמית המז'רז'ר: שרוול כחול עם צמיד זהב, אור מהשמיים, חכה וחוט עם פתיון ז'ירז'ור */
 function drawCatch(c){
-  const e=c.e,s=e.T.size,t=c.t,lift=catchLift(c),lx=c.x-30*s,mouth=GROUND+e.yo-60*s;
-  const hy=t<AMIT.down?-200+330*(t/AMIT.down):t<AMIT.bite?130:t<AMIT.lift?130-60*(t-AMIT.bite)/(AMIT.lift-AMIT.bite):70-320*(t-AMIT.lift)/(AMIT.end-AMIT.lift);
-  if(t<AMIT.lift)drawAngler(e,lift);
+  const e=c.e,s=e.T.size,t=c.t,P=c.pull,E=P?AMIT.snap:AMIT.lift,lift=P?(e.lift||0):catchLift(c),lx=P?e.x:c.x-30*s,mouth=P?GROUND-90*s:GROUND+e.yo-60*s;
+  const hy=t<AMIT.down?-200+330*(t/AMIT.down):t<AMIT.bite?130:t<E?130-(P?20:60)*(t-AMIT.bite)/(E-AMIT.bite)+(P?Math.sin(G.time*30)*4:0):(P?110:70)-320*(t-E)/(AMIT.end-E);
+  if(!P&&t<AMIT.lift)drawAngler(e,lift);
+  ctx.save();if(lx>W-260){ctx.translate(2*lx,0);ctx.scale(-1,1);} // ליד הקצה הימני היד מגיעה משמאל
   const hx=lx+120,tipX=lx+4,tipY=hy+60;
   const lg=ctx.createLinearGradient(0,0,0,hy+60);lg.addColorStop(0,'rgba(255,240,190,.32)');lg.addColorStop(1,'rgba(255,240,190,0)');
   ctx.fillStyle=lg;ctx.beginPath();ctx.moveTo(hx+20,-10);ctx.lineTo(hx+200,-10);ctx.lineTo(hx+40,hy+50);ctx.lineTo(hx-40,hy+50);ctx.closePath();ctx.fill();
-  if(t<AMIT.lift){const ly=t<AMIT.down?tipY+(mouth-tipY)*(t/AMIT.down):mouth-lift;
+  if(P&&t>=E){ctx.strokeStyle='#ffffffb0';ctx.lineWidth=1.3;ctx.beginPath();ctx.moveTo(tipX,tipY);ctx.quadraticCurveTo(tipX-14,tipY+30,tipX+6+Math.sin(G.time*12)*6,tipY+60);ctx.stroke();}
+  if(t<E){const ly=t<AMIT.down?tipY+(mouth-tipY)*(t/AMIT.down):mouth-lift;
     ctx.strokeStyle='#ffffffd0';ctx.lineWidth=1.3;ctx.beginPath();ctx.moveTo(tipX,tipY);ctx.lineTo(lx,ly-10);ctx.stroke();
     const gl=ctx.createRadialGradient(lx,ly,1,lx,ly,22);gl.addColorStop(0,'#ffe9a0aa');gl.addColorStop(1,'#ffe9a000');ctx.fillStyle=gl;ctx.beginPath();ctx.arc(lx,ly,22,0,Math.PI*2);ctx.fill();
     ctx.save();ctx.translate(lx,ly);ctx.rotate(-Math.PI/2+Math.sin(G.time*8)*.15);fishIcon(0,0,.85);ctx.restore();}
@@ -774,7 +821,7 @@ function drawCatch(c){
   ctx.strokeStyle='#ffd36b';ctx.lineWidth=36;ctx.beginPath();ctx.moveTo(14,-16);ctx.lineTo(18,-24);ctx.stroke();
   ell(0,0,20,16,'#f1c9a0',-.5);
   for(let i=0;i<4;i++)ell(-12+i*2,-8+i*7,7,4.5,i%2?'#e8b98c':'#f1c9a0',-.5);
-  ell(10,-14,8,4.5,'#e8b98c',.9);ctx.restore();
+  ell(10,-14,8,4.5,'#e8b98c',.9);ctx.restore();ctx.restore();
 }
 const isHe=t=>/[֐-׿]/.test(t);
 function txt(t,x,y,font,fill,strokeW){ctx.direction=isHe(t)?'rtl':'ltr';ctx.textAlign='center';ctx.font=font;ctx.lineJoin='round';if(strokeW){ctx.strokeStyle='#000c';ctx.lineWidth=strokeW;ctx.strokeText(t,x,y);}ctx.fillStyle=fill;ctx.fillText(t,x,y);}
@@ -801,11 +848,55 @@ function drawBanner(){
   if(b.sub)txt(b.sub,W/2,204,'700 19px Heebo,sans-serif','#f6e7c8',4);
   ctx.globalAlpha=1;
 }
+/* זרוע מתחדדת: עקומה ריבועית עם רוחב שיורד מ-w0 ל-w1 */
+function tent(x0,y0,cx,cy,x1,y1,w0,w1,c){const L=[],R=[];
+  for(let i=0;i<=12;i++){const t=i/12,m=1-t,x=m*m*x0+2*m*t*cx+t*t*x1,y=m*m*y0+2*m*t*cy+t*t*y1,dx=2*m*(cx-x0)+2*t*(x1-cx),dy=2*m*(cy-y0)+2*t*(y1-cy),l=Math.hypot(dx,dy)||1,w=(w0+(w1-w0)*t)/2;
+    L.push([x-dy/l*w,y+dx/l*w]);R.push([x+dy/l*w,y-dx/l*w]);}
+  ctx.fillStyle=c;ctx.beginPath();L.forEach(([x,y],i)=>i?ctx.lineTo(x,y):ctx.moveTo(x,y));for(let i=R.length-1;i>=0;i--)ctx.lineTo(R[i][0],R[i][1]);ctx.closePath();ctx.fill();}
+/* הקראקן והגור: ראש-מעטפת ענק, עיניים צהובות עם אישון שסוע (לגור עיניים גדולות וחמודות), זרועות על הקרקע וזרוע קדמית שמכה */
+function drawKraken(e){
+  const T=e.T,s=T.size,fl=e.flash>0,cub=T.cub,body=fl?'#fff':cub?'#c25a92':'#8a2e63',dark=fl?'#ddd':cub?'#8a3a66':'#5a1a40',light=fl?'#fff':cub?'#eba0c6':'#b8508a',lift=e.lift||0,tm=G.time*2.2+e.walk*.2;
+  ctx.save();ctx.translate(e.x,GROUND);ell(0,2,46*s,9*s,'#0005');ctx.translate(0,-lift);ctx.scale(s,s);
+  for(let i=5;i>=0;i--){const bx=-18+i*7,tx=-34+i*16+Math.sin(tm+i)*4,cx=(bx+tx)/2+(i<3?-12:12);tent(bx,-28,cx,-6+lift/s*.3,tx,-3+lift/s*.6,10,2.5,i%2?dark:body);}
+  const sw=Math.sin(tm*1.3)*8;
+  tent(12,-50,46,-88,40+sw,-118,9,2,dark);
+  if(e.lunge>0)tent(-12,-50,-56,-62,-70,-6,10,3,body);else tent(-12,-50,-44,-90,-36-sw,-112,10,2,body);
+  ell(0,-64,30,38,body);ctx.globalAlpha=fl?1:.5;ell(-9,-82,10,15,light);ctx.globalAlpha=1;
+  if(!cub&&!fl){for(const[x,y,r]of[[14,-84,3],[18,-72,2],[-16,-62,2.5],[8,-94,2]])ell(x,y,r,r,'#d9c7b8');ctx.strokeStyle='#3a0f2a';ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(10,-60);ctx.lineTo(20,-48);ctx.moveTo(14,-60);ctx.lineTo(18,-52);ctx.stroke();}
+  if(cub){for(const x of[-11,11]){ell(x,-52,9,10,'#fff');ell(x-2,-51,4.5,5,'#1a0a14');ell(x-3.5,-53,1.6,1.6,'#fff');}}
+  else{for(const x of[-11,11]){ctx.shadowColor='#ffe066';ctx.shadowBlur=fl?0:10;ell(x,-52,8,6.5,'#ffe066');ctx.shadowBlur=0;ctx.fillStyle='#1a0a14';ctx.fillRect(x-6,-53.3,12,2.6);}
+    ctx.strokeStyle=dark;ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(-20,-62);ctx.lineTo(-4,-58);ctx.moveTo(20,-62);ctx.lineTo(4,-58);ctx.stroke();}
+  ctx.restore();
+  if(e.stun>0&&!lift)for(let i=0;i<3;i++){const a=G.time*6+i*2.1;star(e.x+Math.cos(a)*16*s,GROUND-108*s+Math.sin(a)*4,4);}
+}
+/* הקראקן מציץ מהים ברקע: צללית עם עיניים זוהרות. rise: 0 מתחת למים, 1 בחוץ */
+function drawSeaKraken(x,rise,sc){
+  ctx.save();ctx.beginPath();ctx.rect(0,0,W,388);ctx.clip();ctx.translate(x,388+(1-rise)*95*sc);ctx.scale(sc,sc);ctx.globalAlpha=.92;
+  const tm=G.time*1.6;
+  tent(-20,-10,-42,-50,-50+Math.sin(tm)*8,-86,10,2,'#3a1530');tent(22,-10,46,-46,52+Math.sin(tm+1.5)*8,-80,10,2,'#3a1530');
+  ell(0,-48,26,36,'#3a1530');ctx.globalAlpha=1;
+  for(const ex of[-10,10]){ctx.shadowColor='#ffe066';ctx.shadowBlur=12;ell(ex,-40,4.5,3.5,'#ffe066');ctx.shadowBlur=0;}
+  ctx.restore();
+}
+function drawSlams(){
+  for(const s of G.slams){const t=s.t;
+    if(t<.9){const k=t/.9;ell(s.x,GROUND+2,20+k*22,6+k*3,`rgba(40,10,30,${.25+.45*k})`);ctx.strokeStyle=`rgba(255,80,80,${.3+.5*k*(Math.sin(t*30)>0?1:.4)})`;ctx.lineWidth=2;ctx.beginPath();ctx.ellipse(s.x,GROUND+2,42,9,0,0,Math.PI*2);ctx.stroke();}
+    else{const h=Math.min(1,(t-.9)/.1)*(t<1.3?1:Math.max(0,1-(t-1.3)/.3));if(h>0)tent(s.x-6,GROUND+6,s.x-22,GROUND-80*h,s.x+Math.sin(G.time*10)*8,GROUND-160*h,24,4,'#8a2e63');}}
+}
+/* ערפל הכניסה של הקראקן */
+function drawIntro(){
+  const t=G.intro.t,a=t<2.4?t/2.4*.92:t<2.7?.92:Math.max(0,.92*(1-(t-2.7)/1.7));
+  ctx.fillStyle=`rgba(55,50,70,${a*.65})`;ctx.fillRect(0,0,W,H);
+  for(let i=0;i<14;i++){const x=(i*137)%W+Math.sin(G.time*.4+i)*50,y=140+(i*53)%320,r=130+(i*31)%90,g=ctx.createRadialGradient(x,y,10,x,y,r);
+    g.addColorStop(0,`rgba(170,170,190,${a*.7})`);g.addColorStop(1,'rgba(170,170,190,0)');ctx.fillStyle=g;ctx.fillRect(x-r,y-r,r*2,r*2);}
+  if(t>.3&&t<3.8){const b=Math.min(1,(t-.3)*3,(3.8-t)*3),j=rnd(-2,2);ctx.globalAlpha=b;
+    txt('הקראקן מגיע!',W/2+j,210+j,'64px "Suez One",serif','#ff7ab0',8);txt('ערפל כבד עולה מהים...',W/2,252,'700 22px Heebo,sans-serif','#f6e7c8',5);ctx.globalAlpha=1;}
+}
 function drawBossBar(){
   const b=G.enemies.find(e=>e.T.boss);if(!b)return;const w=380,x=W/2-w/2,y=96;
-  ctx.fillStyle='#000b';ctx.fillRect(x-4,y-4,w+8,22);ctx.fillStyle='#3a1550';ctx.fillRect(x,y,w,14);ctx.fillStyle='#b44cff';ctx.fillRect(x,y,w*Math.max(0,b.hp/b.max),14);
+  ctx.fillStyle='#000b';ctx.fillRect(x-4,y-4,w+8,22);ctx.fillStyle='#3a1550';ctx.fillRect(x,y,w,14);ctx.fillStyle=b.T.bar;ctx.fillRect(x,y,w*Math.max(0,b.hp/b.max),14);
   ctx.strokeStyle='#e0b040';ctx.lineWidth=2;ctx.strokeRect(x-4,y-4,w+8,22);
-  txt('המלך חולדה',W/2,y-10,'20px "Suez One",serif','#ffd36b',4);
+  txt(b.T.name,W/2,y-10,'20px "Suez One",serif','#ffd36b',4);
 }
 function draw(){
   ctx.setTransform(cv.width/W,0,0,cv.height/H,0,0);
@@ -813,7 +904,8 @@ function draw(){
   drawBG();drawDeo();
   for(const a of[...G.allies].sort((a,b)=>a.yo-b.yo))drawHamster(a.x,GROUND+a.yo,.82,1,{atk:a.atk,hurt:a.hurt,walk:0});
   const F=G.fury;if(F)drawFuryBack();
-  for(const e of G.enemies)e.T.angler?drawAngler(e):drawRodent(e);
+  drawSlams();
+  for(const e of G.enemies)e.T.angler?drawAngler(e):e.T.kraken?drawKraken(e):drawRodent(e);
   for(const c of G.catches)drawCatch(c);
   const p=G.player;
   if(F&&F.t>FURY.grow&&F.t<FURY.back){const g=Math.min(1,(F.t-FURY.grow)/.18),s=1.05*(g<1?g*(1.25-.25*g):1);
@@ -821,6 +913,7 @@ function draw(){
   else if(state!=='wheel')drawHamster(p.x,GROUND+4-p.z,TIERS[G.tier].scale,p.facing,{atk:p.atk,hurt:p.hurt,block:p.blocking&&state==='play',walk:p.walk,kick:p.kickAnim,leader:true,dead:p.hp<=0,tier:G.tier,z:p.z,noSpear:p.spearT>0});
   drawArrows();drawSpears();drawParts();if(F)drawFuryFront();drawTexts();drawFG();
   ctx.restore();
+  if(G.intro)drawIntro();
   drawBossBar();if(G.banner&&!F)drawBanner();if(F)drawFuryOverlay();
   if(G.wheel)drawWheel();
 }
@@ -857,7 +950,7 @@ function updateHud(){
   setT('hpName','ליאונידס'+(G.tier?' '+'★'.repeat(G.tier):''));
   const sh=G.tier>=2;$('throwTouch').hidden=!sh;$('throwChip').hidden=!(sh&&showThrow);
   if(sh&&showThrow){const r=p.spearT/THROW.back;$('throwBar').style.transform=`scaleX(${r})`;setT('throwTxt',r>0?`חנית ${Math.ceil(p.spearT)}`:'חנית (R)');}
-  $('amitBtn').classList.toggle('off',!amitTarget()||G.granary.hp<=AMIT.cost);
+  $('amitBtn').classList.toggle('off',!amitTarget()||G.granary.hp<=AMIT.cost||G.amitCd>0);setT('amitBtn',G.amitCd>0?`🎣 עמית ${Math.ceil(G.amitCd)}`:'🎣 עמית (Q)');
   const k=p.kickCd/p.kickMax;$('kickBar').style.transform=`scaleX(${1-k})`;setT('kickTxt',k>0?`בעיטה בעוד ${Math.ceil(p.kickCd)}`:'זאת ספרטה! (E)');
 }
 
